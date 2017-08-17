@@ -5,6 +5,7 @@ require("robot_control")
 require("get_set")
 
 --------------------------------------------- ompl functions -------------------------------------------------------
+_robot_hd = simGetObjectHandle('centauro')
 _robot_dim = 2
 _joint_dim = 4
 _collision_hd_1 = nil
@@ -52,15 +53,27 @@ init_statespace=function(robot_hd, joint_hds, start_pose, goal_pose)
         state_spaces[1]=simExtOMPL_createStateSpace('base_space',sim_ompl_statespacetype_pose3d,robot_hd,min_range,max_range,weight_move)               -- base space        
     end
 
-    for i=1,_joint_dim,1 do
-        local cyclic, range = simGetJointInterval(joint_hds[i])
-        if cyclic == true then 
-            range = {-math.pi, math.pi}
-        end
-        local weight = 1
-        print(cyclic, range[1], range[2])     
-        state_spaces[#state_spaces+1]=simExtOMPL_createStateSpace('joint'..i,sim_ompl_statespacetype_joint_position,joint_hds[i],{range[1]},{range[2]}, weight,robot_hd)
-    end
+    -- height
+    min_range={-0.15}
+    max_range={0.12}
+    local weight_move = 3
+    state_spaces[2]=simExtOMPL_createStateSpace('height',sim_ompl_statespacetype_joint_position,robot_hd,min_range,max_range,weight_move) 
+
+    -- leg
+    min_range={-0.05}
+    max_range={0.25}
+    local weight_move = 3
+    state_spaces[3]=simExtOMPL_createStateSpace('leg_width',sim_ompl_statespacetype_joint_position,robot_hd,min_range,max_range,weight_move) 
+
+    -- for i=1,_joint_dim,1 do
+    --     local cyclic, range = simGetJointInterval(joint_hds[i])
+    --     if cyclic == true then 
+    --         range = {-math.pi, math.pi}
+    --     end
+    --     local weight = 1
+    --     print(cyclic, range[1], range[2])     
+    --     state_spaces[#state_spaces+1]=simExtOMPL_createStateSpace('joint'..i,sim_ompl_statespacetype_joint_position,joint_hds[i],{range[1]},{range[2]}, weight,robot_hd)
+    -- end
 
     return state_spaces
 end
@@ -80,8 +93,8 @@ init_task=function(start_name, task_id)
 
     local task_hd = simExtOMPL_createTask(task_id)
     -- simExtOMPL_setVerboseLevel(task_hd, 3)
-    -- simExtOMPL_setAlgorithm(task_hd,sim_ompl_algorithm_RRTConnect)
-    simExtOMPL_setAlgorithm(task_hd,sim_ompl_algorithm_pSBL)
+    simExtOMPL_setAlgorithm(task_hd,sim_ompl_algorithm_RRTConnect)
+    -- simExtOMPL_setAlgorithm(task_hd,sim_ompl_algorithm_pSBL)
 
     ------ callbacks ---------------\
     simExtOMPL_setGoalCallback(task_hd, 'goalSatisfied')
@@ -90,8 +103,8 @@ init_task=function(start_name, task_id)
     end
 
     -- -- start pose --
-    startpose = get_state(robot_hd, joint_hds, _robot_dim, _joint_dim) 
-    goalpose = get_state(target_hd, joint_hds, _robot_dim, _joint_dim)
+    startpose = get_state_hl(robot_hd, _robot_dim) 
+    goalpose = get_state_hl(target_hd, _robot_dim)
 
     -- print ('start pose ', #startpose, #joint_hds, _robot_dim)
 
@@ -156,41 +169,12 @@ end
 
 
 stateValidation=function(state)
-    -- displayInfo('in stateValidation ')
-
-    -- Read the current state:
-    --local res, current_state = simExtOMPL_readState(_task_hd)
-    --_sample_num = _sample_num+1
-    local r = simExtOMPL_writeState(_callback_task_hd, state)
-    local pass=false
-    
-    -- check if the foot is on the ground
-    local isOnGround = true
-    -- foot_pos = get_foottip_positions(_callback_foot_hds)
-    -- for i=1,#foot_pos,1 do
-    --     local pos = foot_pos[i]
-    --     if pos[3] > 0.03 then
-    --         isOnGround = false
-    --         break
-    --     end
-    -- end
-
-    if isOnGround then
-        local res=simCheckCollision(_callback_collision_hd_1,_callback_collision_hd_2)
-        --local res, dist = simCheckDistance(simGetCollectionHandle('robot_body'),simGetCollectionHandle('obstacles'),0.02)
-        if res == 0 then
-            pass=true
-            --_valid_num = _valid_num+1
-        end
-    end
+    forbidThreadSwitches(true)
+    -- print('validation!!!')
+    local pass = do_action_hl(_robot_hd, state)
     --res = simExtOMPL_writeState(_task_hd, current_state)
     -- sleep(1)
     -- simSwitchThread()
-    --displayInfo('callback: '..test)
-
-    -- Return whether the tested state is valid or not:
-    -- print('stateValidation: '..state[1], state[2], tostring(pass))
-    -- _is_add_to_tree = pass
-
+    forbidThreadSwitches(false)
     return pass
 end

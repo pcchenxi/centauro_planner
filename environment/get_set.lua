@@ -82,3 +82,42 @@ function get_state(hd, joint_hds, base_dim, joint_dim)
 
     return state
 end
+
+function get_state_hl(hd, base_dim)
+    local pos =simGetObjectPosition(hd,-1)
+    local ori =simGetObjectQuaternion(hd,-1)
+
+    local state = {}
+    if base_dim == 1 then         -- xy
+        state[1] = pos[1]
+        state[2] = pos[2]
+    elseif base_dim == 2 then    -- xy yaw
+        state[1] = pos[1]
+        state[2] = pos[2]
+        state[3] = ori[3]
+    elseif base_dim == 3 then    -- xyz yaw
+        state[1] = pos[1]
+        state[2] = pos[2]
+        state[3] = pos[3]
+        state[4] = ori[3]
+    elseif base_dim == 4 then    -- xyz roll pitch yaw
+        state[1] = pos[1]
+        state[2] = pos[2]
+        state[3] = pos[3]
+        state[4] = ori[1]
+        state[5] = ori[2]
+        state[6] = ori[3]
+    end
+
+    local hip_hd = simGetObjectHandle('hip_pitch_1')
+    local ankle_hd = simGetObjectHandle('ankle_pitch_1')
+    local robot_hd = simGetObjectHandle('centauro')
+
+    local hip_pos =simGetObjectPosition(hip_hd, robot_hd)
+    local ankle_pos =simGetObjectPosition(ankle_hd, robot_hd)
+
+    state[#state+1] = pos[3]
+    state[#state+1] = ankle_pos[1] - hip_pos[1]
+
+    return state
+end

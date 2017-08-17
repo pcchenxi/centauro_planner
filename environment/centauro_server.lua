@@ -1,6 +1,7 @@
 package.path=package.path .. ";/home/xi/workspace/centauro_planer/environment/?.lua"
 require("common_functions")
 require("ompl_functions")
+require("robot_control")
 
 -- simSetThreadSwitchTiming(2) 
 -- simExtRemoteApiStart(19999)
@@ -51,27 +52,30 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
 end
 
 function generate_path()
-    init_params(2, 8, 'centauro', 'obstacle_all', false)
+    init_params(2, 8, 'centauro', 'obstacle_all', true)
     task_hd, state_dim = init_task('centauro','task_1')
-    path = compute_path(task_hd, 100)
+    path = compute_path(task_hd, 60)
     print ('path found ', #path)
     -- displayInfo('finish 1 '..#path)
-    applyPath(task_hd, path, 0.1)
+
+    for i=1, 30, 1 do 
+        applyPath(task_hd, path, 0.1)
+    end
     simExtOMPL_destroyTask(task_hd)
 
     return path
 end
 
 function applyPath(task_hd, path, speed)
-    print ('in apply path', #path, state_dim)
-    simSetModelProperty(robot_hd, 32)
+    -- simSetModelProperty(robot_hd, 32)
 
     local state = {}
     for i=1,#path-state_dim,state_dim do
         for j=1,state_dim,1 do
             state[j]=path[i+j-1]
         end
-        res = simExtOMPL_writeState(task_hd, state) 
+        do_action_hl(_robot_hd, state)
+        -- res = simExtOMPL_writeState(task_hd, state) 
         -- pos = {}
         -- pos[1] = state[1]
         -- pos[2] = state[2]
@@ -82,11 +86,11 @@ function applyPath(task_hd, path, speed)
         sleep(speed)
         simSwitchThread()
     end
-    simSetModelProperty(robot_hd, 0)
+    -- simSetModelProperty(robot_hd, 0)
 end
 
 function start()
-    -- sleep (2)
+    sleep (3)
     print('reset')
     _robot_hd = simGetObjectHandle('centauro')
     _robot_body_hd = simGetObjectHandle('body_ref')
@@ -107,28 +111,39 @@ function init()
         start()
         initialized = true
     end 
-    forbidThreadSwitches(true)
-    -- set target --
-    local robot_pos = _start_pos
-    local robot_ori = _start_ori
+    -- -- forbidThreadSwitches(true)
+    -- -- set target --
+    -- local robot_pos = _start_pos
+    -- local robot_ori = _start_ori
 
-    robot_pos[1] = _start_pos[1] 
-    robot_pos[2] = _start_pos[2]
-    robot_pos[3] = _start_pos[3]
+    -- robot_pos[1] = _start_pos[1] 
+    -- robot_pos[2] = _start_pos[2]
+    -- robot_pos[3] = _start_pos[3]
 
-    robot_ori[3] = 0
+    -- robot_ori[3] = 0
 
-    local target_pos = {}
-    target_pos[1] = (math.random() - 0.5) * 2 + robot_pos[1]
-    target_pos[2] = (math.random() - 0.5) * 2 + robot_pos[2]
-    target_pos[3] = _start_pos[3]
+    -- local target_pos = {}
+    -- target_pos[1] = (math.random() - 0.5) * 2 + robot_pos[1]
+    -- target_pos[2] = (math.random() - 0.5) * 2 + robot_pos[2]
+    -- target_pos[3] = _start_pos[3]
 
-    simSetObjectPosition(_target_hd,-1,target_pos)
-
-    -- g_path = generate_path()
+    -- simSetObjectPosition(_target_hd,-1,target_pos)
+    simSetModelProperty(_robot_hd, 32)
+    g_path = generate_path()
 end
 
 initialized = false
+init()
+-- simSetModelProperty(_robot_hd, 32)
+
+-- print(_start_pos[1], _start_pos[2], _start_ori[3])
+-- -- for i=1, 10, 1 do
+--     -- i = 0
+-- action = {_start_pos[1], _start_pos[2], 0, -0.2, 0.25}
+-- do_action_hl(_robot_hd, action)
+-- simSwitchThread()
+-- sleep(3)
+-- end
 -- start()
 
 -- init()

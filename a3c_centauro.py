@@ -13,7 +13,7 @@ from environment import centauro_env
 
 load_model = True
 LOG_DIR = './data/log'
-N_WORKERS = 4 #multiprocessing.cpu_count()
+N_WORKERS = 1 #multiprocessing.cpu_count()
 print ('cpu: ', multiprocessing.cpu_count())
 MAX_GLOBAL_EP = 10000
 MAX_STEP_EP = 50
@@ -288,7 +288,7 @@ class Worker(object):
 
                 batch_s, batch_a, batch_r, batch_v_real = [], [], [], []
 
-                self.write_summary(mean_reward, mean_return, c_loss, a_loss)
+                # self.write_summary(mean_reward, mean_return, c_loss, a_loss)
 
 
     def save_buffer(self, buffer_s, buffer_a, buffer_r, buffer_v_target, type_index):

@@ -55,13 +55,13 @@ init_statespace=function(robot_hd, joint_hds, start_pose, goal_pose)
 
     -- height
     min_range={-0.15}
-    max_range={0.12}
+    max_range={0.15}
     local weight_move = 3
     state_spaces[2]=simExtOMPL_createStateSpace('height',sim_ompl_statespacetype_joint_position,robot_hd,min_range,max_range,weight_move) 
 
     -- leg
-    min_range={-0.05}
-    max_range={0.25}
+    min_range={-0.0}
+    max_range={0.15}
     local weight_move = 3
     state_spaces[3]=simExtOMPL_createStateSpace('leg_width',sim_ompl_statespacetype_joint_position,robot_hd,min_range,max_range,weight_move) 
 
@@ -169,12 +169,16 @@ end
 
 
 stateValidation=function(state)
-    forbidThreadSwitches(true)
+    local is_valid = false
+    -- forbidThreadSwitches(true)
     -- print('validation!!!')
     local pass = do_action_hl(_robot_hd, state)
+    if pass == 't' then
+        is_valid = true
+    end
     --res = simExtOMPL_writeState(_task_hd, current_state)
     -- sleep(1)
     -- simSwitchThread()
-    forbidThreadSwitches(false)
-    return pass
+    -- forbidThreadSwitches(false)
+    return is_valid
 end

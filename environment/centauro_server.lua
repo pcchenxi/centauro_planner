@@ -12,41 +12,57 @@ function reset(inInts,inFloats,inStrings,inBuffer)
 end
 
 function step(inInts,inFloats,inStrings,inBuffer)
-    res = do_action(_robot_hd, inFloats)
+    print('step')
+    res = do_action_rl(_robot_hd, inFloats)
     -- sample_obstacle_position(obs_hds, #obs_hds)
 
     return {}, {}, {}, res
 end
 
+function get_obstacle_info(inInts,inFloats,inStrings,inBuffer)
+    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
+    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
 
--- function get_obstacle_info(inInts,inFloats,inStrings,inBuffer)
---     collection_hd = simGetCollectionHandle('obstacle_all')
---     obstacles_hds = simGetCollectionObjects(obstacle_low_hd)
+    local obs_info = {}
+    for i=1, #obstacle_dynamic_hds, 1 do 
+        local pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+        local res, type, dim = simGetShapeGeomInfo(obstacle_dynamic_hds[i])
+        obs_info[#obs_info+1] = pos[1]
+        obs_info[#obs_info+1] = pos[2]
 
---     for i=1, #_obstacles_hds, 1 do 
---         local pos = simGetObjectPosition(_obstacles_hds[i])
+        obs_info[#obs_info+1] = dim[1]
+        obs_info[#obs_info+1] = dim[2]
+        obs_info[#obs_info+1] = dim[3]
 
+        print('shape: ', dim[1], dim[2], dim[3], dim[4])
+    end
 
---     end
-
---     return {}, {}, {}, res
--- end
+    return {}, obs_info, {}, ''
+end
 
 function get_robot_state(inInts,inFloats,inStrings,inBuffer)
-    local pos =simGetObjectPosition(_robot_body_hd,-1)
-    local ori =simGetObjectQuaternion(_robot_body_hd,-1)
-    local joint_pose = get_joint_values(_joint_hds)
+    local target_pos =simGetObjectPosition(_target_hd, _robot_hd)
+    local target_ori =simGetObjectPosition(_target_hd, _robot_hd)
 
+    local pos =simGetObjectPosition(_robot_hd,-1)
+    local ori =simGetObjectQuaternion(_robot_hd,-1)
+    local joint_pose = get_joint_values(_joint_hds)
+    local leg_l = get_current_l(_robot_hd)
+
+    -- x, y, theta, h, l,   tx, ty, t_theta,   t_h, t_l
     local state = {}
     state[1] = pos[1]
     state[2] = pos[2]
-    state[3] = pos[3]
-    state[4] = ori[3]
+    state[3] = ori[3]
+    state[4] = pos[3]
+    state[5] = leg_l
 
-    for i=1, #_joint_hds, 1 do
-        state[#state+1] = _joint_hds[i]
-    end
+    state[6] = target_pos[1]
+    state[7] = target_pos[2]
+    state[8] = target_ori[3]
 
+    state[9] = 0.1
+    state[10] = 0.0
     -- print ('in get robot state:', #state[3])
     return {}, state, {}, ''
 end
@@ -54,7 +70,7 @@ end
 function generate_path()
     init_params(2, 8, 'centauro', 'obstacle_all', true)
     task_hd, state_dim = init_task('centauro','task_1')
-    path = compute_path(task_hd, 60)
+    path = compute_path(task_hd, 10)
     print ('path found ', #path)
     -- displayInfo('finish 1 '..#path)
 
@@ -90,7 +106,7 @@ function applyPath(task_hd, path, speed)
 end
 
 function start()
-    sleep (3)
+    -- sleep (3)
     print('reset')
     _robot_hd = simGetObjectHandle('centauro')
     _robot_body_hd = simGetObjectHandle('body_ref')
@@ -128,21 +144,23 @@ function init()
     -- target_pos[3] = _start_pos[3]
 
     -- simSetObjectPosition(_target_hd,-1,target_pos)
-    simSetModelProperty(_robot_hd, 32)
-    g_path = generate_path()
+    -- simSetModelProperty(_robot_hd, 32)
+    -- g_path = generate_path()
 end
 
 initialized = false
-init()
+start()
+-- get_obstacle_info(nil, nil, nil, nil)
+-- init()
 -- simSetModelProperty(_robot_hd, 32)
 
 -- print(_start_pos[1], _start_pos[2], _start_ori[3])
--- -- for i=1, 10, 1 do
---     -- i = 0
--- action = {_start_pos[1], _start_pos[2], 0, -0.2, 0.25}
--- do_action_hl(_robot_hd, action)
--- simSwitchThread()
--- sleep(3)
+-- for i=1, 10, 1 do
+-- --     -- i = 0
+--     action = {_start_pos[1], _start_pos[2], 0, 0, 0.1}
+--     do_action_hl(_robot_hd, action)
+--     simSwitchThread()
+--     sleep(3)
 -- end
 -- start()
 

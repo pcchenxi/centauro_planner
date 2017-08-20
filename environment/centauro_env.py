@@ -12,7 +12,10 @@ print ('import env vrep')
 
 map_shift = 2.5
 observation_range = 1
+
+map_size = 5
 grid_size = 0.1
+map_pixel = int(map_size/grid_size)
 
 observation_pixel = int(observation_range/grid_size)
 
@@ -33,7 +36,7 @@ class Simu_env():
         self.succed_time = 0
         self.pass_ep = 1
         self.ep_reap_time = 0
-        self.terrain_map = np.zeros((100, 100), np.float32)
+        self.terrain_map = np.zeros((map_pixel, map_pixel), np.float32)
         self.obs_grid = np.zeros((observation_pixel*2, observation_pixel*2), np.float32)
 
         self.connect_vrep()
@@ -230,29 +233,30 @@ class Simu_env():
 
     def get_terrain_map(self):
         # self.terrain_map
-        _, _, obstacle_info, _, _ = self.call_sim_function('centauro', 'get_obstacle_info')
-        for i in range(0, len(obstacle_info), 5):
-            x = obstacle_info[i+0] + map_shift
-            y = obstacle_info[i+1] + map_shift
+        # _, _, obstacle_info, _, _ = self.call_sim_function('centauro', 'get_obstacle_info')
+        # for i in range(0, len(obstacle_info), 5):
+        #     x = obstacle_info[i+0] + map_shift
+        #     y = obstacle_info[i+1] + map_shift
 
-            if x >= 5 or x <= 0:
-                continue
-            if y >= 5 or y <= 0:
-                continue
-            r = obstacle_info[i+2]
-            h = obstacle_info[i+4]
+        #     if x >= 5 or x <= 0:
+        #         continue
+        #     if y >= 5 or y <= 0:
+        #         continue
+        #     r = obstacle_info[i+2]
+        #     h = obstacle_info[i+4]
 
-            row = self.terrain_map.shape[0] - int(y/grid_size)
-            col = int(x/grid_size)
-            radius = int(r/grid_size )
-            height = int(255/0.5 * h )
+        #     row = self.terrain_map.shape[0] - int(y/grid_size)
+        #     col = int(x/grid_size)
+        #     radius = int(r/grid_size )
+        #     height = int(255/0.5 * h )
         
-            self.terrain_map = cv2.circle(self.terrain_map, (col,row), radius, height, -1)
-        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 4)
-        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 4)
-        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-
+        #     self.terrain_map = cv2.circle(self.terrain_map, (col,row), radius, height, -1)
+        # cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 4)
+        # cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 4)
+        # cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
+        # cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
+        # cv2.imwrite('./data/map.png', self.terrain_map)
+        self.terrain_map = cv2.imread('./data/map.png')
     ########################################################################################################################################
     ###################################   interface function to communicate to the simulator ###############################################
     def call_sim_function(self, object_name, function_name, input_floats=[]):

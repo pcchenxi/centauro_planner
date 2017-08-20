@@ -26,11 +26,14 @@ function get_joint_hds(joint_num)
     local hd5_4=simGetObjectHandle('j_wheel_4')
 
     joint_hds = {}
-    -- joint_hds={hd1_1,hd1_2,hd1_3,hd1_4, hd2_1,hd2_2,hd2_3,hd2_4, hd3_1,hd3_2,hd3_3,hd3_4, hd4_1,hd4_2,hd4_3,hd4_4, hd5_1,hd5_2,hd5_3,hd5_4}
     if joint_num == 8 then
         joint_hds = {hd2_1,hd2_2,hd2_3,hd2_4, hd3_1,hd3_2,hd3_3,hd3_4}
     elseif joint_num == 12 then
         joint_hds = {hd2_1,hd2_2,hd2_3,hd2_4, hd3_1,hd3_2,hd3_3,hd3_4, hd4_1,hd4_2,hd4_3,hd4_4}
+    elseif joint_num == 16 then 
+        joint_hds={hd1_1,hd1_2,hd1_3,hd1_4, hd2_1,hd2_2,hd2_3,hd2_4, hd3_1,hd3_2,hd3_3,hd3_4, hd4_1,hd4_2,hd4_3,hd4_4}
+
+        -- joint_hds={hd1_1,hd1_2,hd1_3,hd1_4, hd2_1,hd2_2,hd2_3,hd2_4, hd3_1,hd3_2,hd3_3,hd3_4, hd4_1,hd4_2,hd4_3,hd4_4, hd5_1,hd5_2,hd5_3,hd5_4}
     end
     return joint_hds
 end
@@ -45,7 +48,7 @@ end
 
 set_joint_values = function(joint_hds, joint_values)
     for i=1, #joint_hds, 1 do
-        res = simSetJointTargetPosition(joint_hds[i], joint_values[i])
+        res = simSetJointPosition(joint_hds[i], joint_values[i])
     end
 end
 

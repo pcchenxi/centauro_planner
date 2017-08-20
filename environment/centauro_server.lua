@@ -6,13 +6,13 @@ require("robot_control")
 -- simSetThreadSwitchTiming(2) 
 -- simExtRemoteApiStart(19999)
 function reset(inInts,inFloats,inStrings,inBuffer)
-    local level = inFloats[1]
-    init()
+    local radius = inFloats[1]
+    init(radius)
     return {}, {}, {}, ''
 end
 
 function step(inInts,inFloats,inStrings,inBuffer)
-    print('step')
+    -- print('step')
     res = do_action_rl(_robot_hd, inFloats)
     -- sample_obstacle_position(obs_hds, #obs_hds)
 
@@ -46,7 +46,7 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
 
     local pos =simGetObjectPosition(_robot_hd,-1)
     local ori =simGetObjectQuaternion(_robot_hd,-1)
-    local joint_pose = get_joint_values(_joint_hds)
+    -- local joint_pose = get_joint_values(_joint_hds)
     local leg_l = get_current_l(_robot_hd)
 
     -- x, y, theta, h, l,   tx, ty, t_theta,   t_h, t_l
@@ -107,11 +107,11 @@ end
 
 function start()
     -- sleep (3)
-    print('reset')
+    -- print('reset')
     _robot_hd = simGetObjectHandle('centauro')
     _robot_body_hd = simGetObjectHandle('body_ref')
     _target_hd = simGetObjectHandle('target')
-    _joint_hds = get_joint_hds(8)
+    _joint_hds = get_joint_hds(16)
 
     _start_pos = simGetObjectPosition(_robot_hd, -1)
     _start_ori = simGetObjectQuaternion(_robot_hd,-1)
@@ -122,11 +122,16 @@ function start()
     -- print (_start_pos[1], _start_pos[2])
 end
 
-function init()
-    if initialized == false then 
-        start()
-        initialized = true
-    end 
+function init(radius)
+    -- print('reset')
+    -- print(_start_pos[1], _start_pos[2], _start_pos[3])
+    -- print(_start_joint_values[9], _start_joint_values[10], _start_joint_values[11], _start_joint_values[12])
+
+    simSetObjectPosition(_robot_hd, -1, _start_pos)
+    simSetObjectQuaternion(_robot_hd, -1, _start_ori)
+    set_joint_values(_joint_hds, _start_joint_values)
+    simSwitchThread()
+
     -- -- forbidThreadSwitches(true)
     -- -- set target --
     -- local robot_pos = _start_pos
@@ -138,19 +143,29 @@ function init()
 
     -- robot_ori[3] = 0
 
-    -- local target_pos = {}
-    -- target_pos[1] = (math.random() - 0.5) * 2 + robot_pos[1]
-    -- target_pos[2] = (math.random() - 0.5) * 2 + robot_pos[2]
-    -- target_pos[3] = _start_pos[3]
+    local target_pos = {}
+    target_pos[1] = (math.random() - 0.5) * radius + _start_pos[1]
+    target_pos[2] = (math.random() - 0.5) * radius + _start_pos[2]
+    target_pos[3] = _start_pos[3]
 
-    -- simSetObjectPosition(_target_hd,-1,target_pos)
+    local target_ori = {} 
+    target_ori[1] = _start_ori[1] 
+    target_ori[2] = _start_ori[2]
+    target_ori[3] = (math.random() - 0.5) * 2 * math.pi
+    target_ori[4] = _start_ori[4]
+
+    simSetObjectPosition(_target_hd,-1,target_pos)
+    simSetObjectQuaternion(_target_hd, -1, target_ori)
+
+    -- sleep(5)
     -- simSetModelProperty(_robot_hd, 32)
     -- g_path = generate_path()
 end
 
 initialized = false
-start()
+
 -- get_obstacle_info(nil, nil, nil, nil)
+start()
 -- init()
 -- simSetModelProperty(_robot_hd, 32)
 

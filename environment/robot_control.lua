@@ -3,11 +3,11 @@ require("get_set")
 
 -- action: vx, vy, vw, vl
 
-step = 0.01
+step = 0.1
 dx = step
 dy = step
-dh = step 
-dl = step
+dh = step/3
+dl = step/3
 dw = math.pi/180 * 1
 
 collision_hd_1 = simGetCollectionHandle('centauro')
@@ -61,7 +61,7 @@ function do_action_rl(robot_hd, action)
     local leg_l = get_current_l(robot_hd)
 
     action[5] = leg_l + dl*action[5]
-    print(leg_l, action[5])
+    -- print(leg_l, action[5])
     res = do_action(robot_hd, action)
     return res
     -- return sample_pose, sample_ori
@@ -121,7 +121,7 @@ function do_action(robot_hd, action)
 
     -- set dummy for target wheel position
     local wheel_target = ankle_target
-    wheel_target[1] = wheel_target[3] - 0.1175
+    wheel_target[1] = wheel_target[1] - 0.1175
     simSetObjectPosition(dummy_wheel_hd, hip_ori_hd, wheel_target)
 
 
@@ -138,22 +138,15 @@ function do_action(robot_hd, action)
 
     local angle_hip = -math.atan2(knee_x, knee_y)
     local hip_p = simGetJointPosition(hip_hd)
-    -- angle_hip = hip_p + angle_hip
     simSetJointPosition(hip_hd, angle_hip)
 
     local ankle_in_knee = simGetObjectPosition(dummy_ankle_hd, knee_hd)
     local angle_knee = math.atan2(ankle_in_knee[2], ankle_in_knee[1])
     local knee_p = simGetJointPosition(knee_hd)
-    -- angle_knee = knee_p + angle_knee
     simSetJointPosition(knee_hd, angle_knee)
 
-    local wheel_in_hip = simGetObjectPosition(dummy_wheel_hd, hip_ori_hd)
-    local ankle_in_hip = simGetObjectPosition(ankle_hd, hip_ori_hd)
-    local diff_x = ankle_in_hip[1] - wheel_in_hip[1]
-    local diff_y = ankle_in_hip[2] - wheel_in_hip[2]
-    local angle_ankle = math.atan2(diff_y, diff_x)      
-    -- local ankle_p = simGetJointPosition(ankle_hd)
-    -- angle_ankle = ankle_p + angle_ankle
+    local wheel_in_ankle = simGetObjectPosition(dummy_wheel_hd, ankle_hd)
+    local angle_ankle = math.atan2(wheel_in_ankle[2], wheel_in_ankle[1])      
     simSetJointPosition(ankle_hd, angle_ankle)
 
 
@@ -203,7 +196,7 @@ get_intersection_point=function(x0, y0, x1, y1, r0, r1)
     local x3_2=x2-h*(y1-y0)/d       -- also x3=x2-h*(y1-y0)/d
     local y3_2=y2+h*(x1-x0)/d       -- also y3=y2+h*(x1-x0)/d
 
-    if x3_1 > x3_2 then
+    if y3_1 > y3_2 then
         return x3_1, y3_1
     else 
         return x3_2, y3_2

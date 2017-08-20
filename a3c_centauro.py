@@ -8,21 +8,23 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import math
 import pickle
+import gym
 
 from environment import centauro_env
 
 load_model = True
 LOG_DIR = './data/log'
-N_WORKERS = 1 #multiprocessing.cpu_count()
+N_WORKERS = 4 #multiprocessing.cpu_count()
 print ('cpu: ', multiprocessing.cpu_count())
 MAX_GLOBAL_EP = 10000
-MAX_STEP_EP = 50
-BATCH_SIZE = 10
+MAX_STEP_EP = 40
+BATCH_SIZE = 300
 GLOBAL_NET_SCOPE = 'Global_Net'
+UPDATE_GLOBAL_ITER = 10
 GAMMA = 0.95
 ENTROPY_BETA = 0.001
-LR_A = 0.002    # learning rate for actor
-LR_C = 0.002    # learning rate for critic
+LR_A = 0.0001    # learning rate for actor
+LR_C = 0.001    # learning rate for critic
 GLOBAL_EP = 0
 
 
@@ -37,7 +39,15 @@ GLOBAL_EP = 0
 
 N_S = centauro_env.observation_space
 N_A = centauro_env.action_space
+N_image_size = centauro_env.observation_image_size
+N_control_size = centauro_env.observation_control
+
 A_BOUND = [-1, 1]
+
+# env = gym.make('Pendulum-v0')
+# N_S = env.observation_space.shape[0]
+# N_A = env.action_space.shape[0]
+# A_BOUND = [env.action_space.low, env.action_space.high]
 
 # v_img = np.zeros((100, 100), np.float32)
 
@@ -47,15 +57,14 @@ class ACNet(object):
         if scope == GLOBAL_NET_SCOPE:   # get global network
             with tf.variable_scope(scope):
                 self.s = tf.placeholder(tf.float32, [None, N_S], 'S')
-                self._build_net()
-                self.params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope )
+                self.a_params, self.c_params, self.params = self._build_net(scope)[-3:]
         else:   # local net, calculate losses
             with tf.variable_scope(scope):
                 self.s = tf.placeholder(tf.float32, [None, N_S], 'S')
                 self.a_his = tf.placeholder(tf.float32, [None, N_A], 'A')
                 self.v_target = tf.placeholder(tf.float32, [None, 1], 'Vtarget')
 
-                mu, sigma, self.v = self._build_net()
+                mu, sigma, self.v, self.a_params, self.c_params, self.params = self._build_net(scope)
 
                 td = tf.subtract(self.v_target, self.v, name='TD_error')
                 with tf.name_scope('c_loss'):
@@ -74,45 +83,83 @@ class ACNet(object):
                     self.a_loss = tf.reduce_mean(-self.exp_v)
 
                 with tf.name_scope('total_loss'):
-                    self.loss = self.c_loss * 0.5 + self.a_loss
+                    self.loss = self.c_loss*0.5 + self.a_loss
 
                 with tf.name_scope('choose_a'):  # use local params to choose action
                     self.A = tf.clip_by_value(tf.squeeze(normal_dist.sample(1), axis=0), A_BOUND[0], A_BOUND[1])
-
                 with tf.name_scope('local_grad'):
-                    self.params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope )
+                    self.a_grads = tf.gradients(self.a_loss, self.a_params)
+                    self.c_grads = tf.gradients(self.c_loss, self.c_params)
                     self.grads = tf.gradients(self.loss, self.params)
 
             with tf.name_scope('sync'):
                 with tf.name_scope('pull'):
-                    self.pull_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.params, globalAC.params)]
-
+                    self.pull_a_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.a_params, globalAC.a_params)]
+                    self.pull_c_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.c_params, globalAC.c_params)]
+                    self.pull_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.params, globalAC.params)]                    
                 with tf.name_scope('push'):
-                    self.update_op = OPT_A.apply_gradients(zip(self.grads, globalAC.params))
+                    self.update_a_op = OPT_A.apply_gradients(zip(self.a_grads, globalAC.a_params))
+                    self.update_c_op = OPT_C.apply_gradients(zip(self.c_grads, globalAC.c_params))
+                    self.update_op = OPT_C.apply_gradients(zip(self.grads, globalAC.params))
 
-
-    def _build_net(self):
-        w_init = tf.random_normal_initializer(0., .1)
-        with tf.variable_scope('feature'):
-            feature = tf.layers.dense(self.s, 100, tf.nn.relu6, kernel_initializer=w_init, name='la')
+    def _build_net(self, scope):
+        w_init = tf.random_normal_initializer(0., .1)    
         with tf.variable_scope('actor'):
-            # l_a = tf.layers.dense(self.<s, 200, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            num_img = N_image_size*N_image_size
+            self.grid = tf.slice(self.s, [0, 0], [-1, num_img])
+            self.control = tf.slice(self.s, [0, num_img], [-1, N_control_size])
+
+            reshaped_grid = tf.reshape(self.grid,shape=[-1, N_image_size, N_image_size, 1]) 
+            reshaped_control = tf.reshape(self.control,shape=[-1, N_control_size]) 
+            # process grid
+            self.conv1 = tf.layers.conv2d(   inputs=reshaped_grid,
+                                        filters=32,
+                                        kernel_size=[3,3],
+                                        padding="valid",
+                                        activation=tf.nn.relu6,
+                                        name = 'grid_conv1')
+            # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
+
+            # self.conv2 = tf.layers.conv2d(   inputs=self.conv1,
+            #                             filters=32,
+            #                             kernel_size=[4,4],
+            #                             padding="valid",
+            #                             activation=tf.nn.relu6,
+            #                             name = 'grid_conv2')            
+            conv_flat = tf.contrib.layers.flatten(self.conv1)
+            conv_fc = tf.layers.dense(inputs=conv_flat, units=200, activation=tf.nn.relu6, name = 'grid_fc')
+
+            # process control 
+            # control_fc = tf.layers.dense(inputs=reshaped_control, units=50, activation=tf.nn.relu6, name = 'control_fc1')
+
+            # concat
+            feature = tf.concat([conv_fc, reshaped_control], 1, name = 'concat')
+            feature = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='fc')            
+            
+            # feature = self.s #tf.concat([conv_flat, reshaped_control], 1, name = 'concat')
+
+            # l_a = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='la')            
             mu = tf.layers.dense(feature, N_A, tf.nn.tanh, kernel_initializer=w_init, name='mu')
             sigma = tf.layers.dense(feature, N_A, tf.nn.softplus, kernel_initializer=w_init, name='sigma')
         with tf.variable_scope('critic'):
-            # l_c = tf.layers.dense(self.s, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            # l_c = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
             v = tf.layers.dense(feature, 1, kernel_initializer=w_init, name='v')  # state value
 
-        return mu, sigma, v
+        a_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/actor')
+        c_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/critic')
+        params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
+
+        return mu, sigma, v, a_params, c_params, params
 
     def update_global(self, feed_dict):  # run by a local
-        # v, c_loss, a_loss, _, _ = SESS.run([self.v, self.c_loss, self.a_loss, self.update_a_op, self.update_c_op], feed_dict)  # local grads applies to global net
-        v, c_loss, a_loss, _= SESS.run([self.v, self.c_loss, self.a_loss, self.update_op], feed_dict)  # local grads applies to global net
-        
-        return v, c_loss, a_loss 
+        # v, c_loss, a_loss, total_loss, _, _ = SESS.run([self.v, self.c_loss, self.a_loss, self.loss, self.update_a_op, self.update_c_op], feed_dict)  # local grads applies to global net
+        v, c_loss, a_loss, total_loss, _ = SESS.run([self.v, self.c_loss, self.a_loss, self.loss, self.update_op], feed_dict)  # local grads applies to global net
+
+        return v, c_loss, a_loss, total_loss 
 
     def pull_global(self):  # run by a local
         SESS.run(self.pull_params_op)
+        # SESS.run([self.pull_a_params_op, self.pull_c_params_op])
 
     def choose_action(self, s):  # run by a local
         s = s[np.newaxis, :]
@@ -215,15 +262,28 @@ class Worker(object):
         type_index = 'u'
         while not COORD.should_stop() and GLOBAL_EP < MAX_GLOBAL_EP:
             s = self.env.reset()
+            # print('reset')
             self.AC.pull_global()
             start_prob = []
             last_prob = []
+            last_r = 0
             for step_in_ep in range(MAX_STEP_EP):
             # while step_in_ep < MAX_STEP_EP:
                 # if self.name == 'W_0':
+                    # env.render()
                 a = self.AC.choose_action(s)
                 s_, r, done, info = self.env.step(a)
+                last_r = r
+                # img = SESS.run(self.AC.conv2, {self.AC.s: s[np.newaxis, :]})
+                # print('img: ', img.shape)
+                # img = s[:N_image_size*N_image_size]
+                # img = np.reshape(img[0], (N_image_size, N_image_size))
+                # print(img[0,:,:,0].shape)
+                # plt.clf()
+                # plt.imshow(img[0,:,:,1], cmap='gray')
+                # plt.pause(0.001)
 
+                
                 # print (r, done)
                 # if r == 10:
                 #     type_index = 'g'
@@ -236,14 +296,14 @@ class Worker(object):
                 #     start_prob = last_prob[0]
 
                 if step_in_ep == MAX_STEP_EP-1:
-                    r = r + GAMMA * SESS.run(self.AC.v, {self.AC.s: s_[np.newaxis, :]})[0, 0]
+                    # r = r + GAMMA * SESS.run(self.AC.v, {self.AC.s: s_[np.newaxis, :]})[0, 0]
+                    r = -1
 
                 buffer_s.append(s)
                 buffer_a.append(a)
                 buffer_r.append(r)
 
                 if done:
-                    print('step num: ', step_in_ep, r)
                     break
                 s = s_
 
@@ -264,7 +324,7 @@ class Worker(object):
 
             mean_reward = np.mean(batch_r)
             mean_return = np.mean(batch_v_real)
-            
+            sum_reward = np.sum(batch_r[:-1])
             GLOBAL_EP += 1
 
             if (len(batch_s) > BATCH_SIZE):
@@ -274,21 +334,18 @@ class Worker(object):
                     self.AC.a_his: batch_a,
                     self.AC.v_target: batch_v_real,
                 }
-                v, c_loss, a_loss = self.AC.update_global(feed_dict)
+                v, c_loss, a_loss, total_loss = self.AC.update_global(feed_dict)
                 # self.AC.pull_global()
 
-                # print(batch_v_real[-1][0], v[-1][0], c_loss, a_loss)
-
-                a_ = self.AC.choose_action(batch_s[-1])
-
                 # if self.name == 'W_0':
-                # print(batch_a[-1], a_, 'predict_v:', v[-1], 'real_v:', batch_v_real[-1], batch_r[-1])
+                # print(batch_r, batch_v_real)
+                print(self.name, len(batch_r), sum_reward, 'predict_v:', v[0], 'real_v:', batch_v_real[0])
                 # print (last_prob)
                 # print (prob - start_prob)
 
                 batch_s, batch_a, batch_r, batch_v_real = [], [], [], []
 
-                # self.write_summary(mean_reward, mean_return, c_loss, a_loss)
+                self.write_summary(sum_reward, mean_return, c_loss, a_loss, total_loss)
 
 
     def save_buffer(self, buffer_s, buffer_a, buffer_r, buffer_v_target, type_index):
@@ -335,15 +392,16 @@ class Worker(object):
         #     plt.pause(0.001)
 
 
-    def write_summary(self, mean_reward, mean_return, c_loss, a_loss):
+    def write_summary(self, mean_reward, mean_return, c_loss, a_loss, total_loss):
         self.saver.save(SESS, './data/model.cptk') 
         # if self.name == 'W_0':
         summary = tf.Summary()
 
-        summary.value.add(tag='Perf/Avg reward', simple_value=float(mean_reward))
+        summary.value.add(tag='Perf/Sum reward', simple_value=float(mean_reward))
         summary.value.add(tag='Perf/Avg return', simple_value=float(mean_return))
         summary.value.add(tag='Loss/V loss', simple_value=float(c_loss))
         summary.value.add(tag='Loss/A loss', simple_value=float(a_loss))
+        summary.value.add(tag='Loss/Total loss', simple_value=float(total_loss))
                 
         # summary.value.add(tag='Losses/loss', simple_value=float(loss))
         # summary.histogram.add(tag='Losses/start_prob', simple_value=float(start_prob))

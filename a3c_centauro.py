@@ -16,15 +16,15 @@ load_model = True
 LOG_DIR = './data/log'
 N_WORKERS = 4 #multiprocessing.cpu_count()
 print ('cpu: ', multiprocessing.cpu_count())
-MAX_GLOBAL_EP = 10000
-MAX_STEP_EP = 40
-BATCH_SIZE = 300
+MAX_GLOBAL_EP = 100000
+MAX_STEP_EP = 30
+BATCH_SIZE = 150
 GLOBAL_NET_SCOPE = 'Global_Net'
 UPDATE_GLOBAL_ITER = 10
 GAMMA = 0.95
 ENTROPY_BETA = 0.001
 LR_A = 0.0001    # learning rate for actor
-LR_C = 0.001    # learning rate for critic
+LR_C = 0.002    # learning rate for critic
 GLOBAL_EP = 0
 
 
@@ -83,7 +83,7 @@ class ACNet(object):
                     self.a_loss = tf.reduce_mean(-self.exp_v)
 
                 with tf.name_scope('total_loss'):
-                    self.loss = self.c_loss*0.5 + self.a_loss
+                    self.loss = self.c_loss + self.a_loss *0.5
 
                 with tf.name_scope('choose_a'):  # use local params to choose action
                     self.A = tf.clip_by_value(tf.squeeze(normal_dist.sample(1), axis=0), A_BOUND[0], A_BOUND[1])
@@ -114,11 +114,26 @@ class ACNet(object):
             # process grid
             self.conv1 = tf.layers.conv2d(   inputs=reshaped_grid,
                                         filters=32,
-                                        kernel_size=[3,3],
+                                        kernel_size=[5,5],
                                         padding="valid",
                                         activation=tf.nn.relu6,
                                         name = 'grid_conv1')
-            # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
+            self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
+                                    
+            self.conv2 = tf.layers.conv2d(   inputs=self.pool1,
+                                        filters=64,
+                                        kernel_size=[5,5],
+                                        padding="valid",
+                                        activation=tf.nn.relu6,
+                                        name = 'grid_conv2')
+            self.pool2 = tf.layers.max_pooling2d(inputs=self.conv2, pool_size=[2, 2], strides=2)
+                                        
+            # self.conv3 = tf.layers.conv2d(   inputs=self.conv2,
+            #                             filters=16,
+            #                             kernel_size=[4,4],
+            #                             padding="valid",
+            #                             activation=tf.nn.relu6,
+            #                             name = 'grid_conv3')                                                                                
 
             # self.conv2 = tf.layers.conv2d(   inputs=self.conv1,
             #                             filters=32,
@@ -126,23 +141,23 @@ class ACNet(object):
             #                             padding="valid",
             #                             activation=tf.nn.relu6,
             #                             name = 'grid_conv2')            
-            conv_flat = tf.contrib.layers.flatten(self.conv1)
-            conv_fc = tf.layers.dense(inputs=conv_flat, units=200, activation=tf.nn.relu6, name = 'grid_fc')
+            conv_flat = tf.contrib.layers.flatten(self.pool2)
+            conv_fc = tf.layers.dense(inputs=conv_flat, units=1024, activation=tf.nn.relu6, name = 'grid_fc')
 
             # process control 
             # control_fc = tf.layers.dense(inputs=reshaped_control, units=50, activation=tf.nn.relu6, name = 'control_fc1')
 
             # concat
             feature = tf.concat([conv_fc, reshaped_control], 1, name = 'concat')
-            feature = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='fc')            
+            feature = tf.layers.dense(feature, 200, tf.nn.relu6, kernel_initializer=w_init, name='fc')            
             
             # feature = self.s #tf.concat([conv_flat, reshaped_control], 1, name = 'concat')
 
-            # l_a = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='la')            
+            # l_a = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='la')            
             mu = tf.layers.dense(feature, N_A, tf.nn.tanh, kernel_initializer=w_init, name='mu')
             sigma = tf.layers.dense(feature, N_A, tf.nn.softplus, kernel_initializer=w_init, name='sigma')
         with tf.variable_scope('critic'):
-            # l_c = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            # l_c = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='lc')
             v = tf.layers.dense(feature, 1, kernel_initializer=w_init, name='v')  # state value
 
         a_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/actor')
@@ -296,8 +311,8 @@ class Worker(object):
                 #     start_prob = last_prob[0]
 
                 if step_in_ep == MAX_STEP_EP-1:
-                    # r = r + GAMMA * SESS.run(self.AC.v, {self.AC.s: s_[np.newaxis, :]})[0, 0]
-                    r = -1
+                    r = r + GAMMA * SESS.run(self.AC.v, {self.AC.s: s_[np.newaxis, :]})[0, 0]
+                    # r = -1
 
                 buffer_s.append(s)
                 buffer_a.append(a)

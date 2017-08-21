@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 print ('import env vrep')
 
 map_shift = 2.5
-observation_range = 1
+observation_range = 1.5
 
 map_size = 5
 grid_size = 0.1
@@ -106,7 +106,7 @@ class Simu_env():
         close = False 
 
         action = np.asarray(action)
-        reward =  -0.1 #-np.sum(abs(action)) * 0.1
+        reward =  0 #-np.sum(abs(action)) * 0.1
         # print(action, reward)
         current_h = robot_state[3]
         target_h = robot_state[8]
@@ -120,15 +120,15 @@ class Simu_env():
         dist_theta = abs(robot_state[2] - robot_state[7])
 
         if dist < self.dist_pre:
-            reward += 0.1 #3 - dist/0.15 * 0.3
+            reward += 0.01 #3 - dist/0.15 * 0.3
         else:
-            reward -= 0.1
+            reward -= 0.01
 
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
-        if dist < 0.1:
-            reward = 1
-            # is_finish = True
+        if dist < 0.2:
+            reward = 10
+            is_finish = True
             close = True
         # if dist < 0.1:
         #     reward += 0.05            
@@ -148,7 +148,7 @@ class Simu_env():
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
             is_finish = True 
-            reward = -5
+            reward = -10
 
         # if abs(robot_state[0] - robot_state[5]) > 0.05:
         #     reward = -1
@@ -232,31 +232,30 @@ class Simu_env():
         return self.obs_grid 
 
     def get_terrain_map(self):
-        # self.terrain_map
-        # _, _, obstacle_info, _, _ = self.call_sim_function('centauro', 'get_obstacle_info')
-        # for i in range(0, len(obstacle_info), 5):
-        #     x = obstacle_info[i+0] + map_shift
-        #     y = obstacle_info[i+1] + map_shift
+        _, _, obstacle_info, _, _ = self.call_sim_function('centauro', 'get_obstacle_info')
+        for i in range(0, len(obstacle_info), 5):
+            x = obstacle_info[i+0] + map_shift
+            y = obstacle_info[i+1] + map_shift
 
-        #     if x >= 5 or x <= 0:
-        #         continue
-        #     if y >= 5 or y <= 0:
-        #         continue
-        #     r = obstacle_info[i+2]
-        #     h = obstacle_info[i+4]
+            if x >= 5 or x <= 0:
+                continue
+            if y >= 5 or y <= 0:
+                continue
+            r = obstacle_info[i+2]
+            h = obstacle_info[i+4]
 
-        #     row = self.terrain_map.shape[0] - int(y/grid_size)
-        #     col = int(x/grid_size)
-        #     radius = int(r/grid_size )
-        #     height = int(255/0.5 * h )
+            row = self.terrain_map.shape[0] - int(y/grid_size)
+            col = int(x/grid_size)
+            radius = int(r/grid_size )
+            height = int(255/0.5 * h )
         
-        #     self.terrain_map = cv2.circle(self.terrain_map, (col,row), radius, height, -1)
-        # cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 4)
-        # cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 4)
-        # cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-        # cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-        # cv2.imwrite('./data/map.png', self.terrain_map)
-        self.terrain_map = cv2.imread('./data/map.png')
+            self.terrain_map = cv2.circle(self.terrain_map, (col,row), radius, height, -1)
+        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 4)
+        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 4)
+        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
+        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
+        cv2.imwrite('./data/map.png', self.terrain_map)
+        # self.terrain_map = cv2.imread('./data/map.png')
     ########################################################################################################################################
     ###################################   interface function to communicate to the simulator ###############################################
     def call_sim_function(self, object_name, function_name, input_floats=[]):

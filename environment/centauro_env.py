@@ -247,14 +247,15 @@ class Simu_env():
             row = self.terrain_map.shape[0] - int(y/grid_size)
             col = int(x/grid_size)
             radius = int(r/grid_size )
-            height = int(255/0.5 * h )
+            height = 1.0/0.5 * h 
         
             cv2.circle(self.terrain_map, (col,row), radius, height, -1)
         ## for boundaries
-        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 3)
-        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 3)
-        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 3)
-        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 3)
+        boundary_height = 1
+        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 1, 3)
+        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 1, 3)
+        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
+        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
         ## for two static obstacles
         # -3.4, -1, 2.6, -1      -2.6, 1, 3.4, 1
         p1_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
@@ -266,10 +267,12 @@ class Simu_env():
         p3_c = int((-1.1 + map_shift)/grid_size)
         p4_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
         p4_c = int((1.9 + map_shift)/grid_size)     
-        cv2.line(self.terrain_map, (p1_c, p1_r), (p2_c, p2_r), 255, 1)
-        cv2.line(self.terrain_map, (p3_c, p3_r), (p4_c, p4_r), 255, 1)
+        cv2.line(self.terrain_map, (p1_c, p1_r), (p2_c, p2_r), boundary_height, 1)
+        cv2.line(self.terrain_map, (p3_c, p3_r), (p4_c, p4_r), boundary_height, 1)
 
-        cv2.imwrite('./data/auto/map.png', self.terrain_map)
+        np.save("./data/auto/map", self.terrain_map)
+        # mpimg.imsave('./data/auto/map.png', self.terrain_map)
+        print('map updated!!!!!')
         # self.terrain_map = cv2.imread('./data/map.png')
     ########################################################################################################################################
     ###################################   interface function to communicate to the simulator ###############################################

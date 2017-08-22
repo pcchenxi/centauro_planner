@@ -443,14 +443,14 @@ if __name__ == "__main__":
     COORD = tf.train.Coordinator()
     SESS.run(tf.global_variables_initializer())
 
-    if load_model == True:
-        print ('Loading Model...')
-        ckpt = tf.train.get_checkpoint_state('./data/')
-        if ckpt and ckpt.model_checkpoint_path:
-            saver.restore(SESS, ckpt.model_checkpoint_path)
-            print ('loaded')
-        else:
-            print ('no model file')
+    # if load_model == True:
+    #     print ('Loading Model...')
+    #     ckpt = tf.train.get_checkpoint_state('./data/')
+    #     if ckpt and ckpt.model_checkpoint_path:
+    #         saver.restore(SESS, ckpt.model_checkpoint_path)
+    #         print ('loaded')
+    #     else:
+    #         print ('no model file')
     
     summary_writer = tf.summary.FileWriter('data/log', SESS.graph)
     # if OUTPUT_GRAPH:

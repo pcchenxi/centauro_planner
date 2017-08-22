@@ -14,7 +14,7 @@ map_shift = 2.5
 observation_range = 1.5
 
 map_size = 5
-grid_size = 0.1
+grid_size = 0.05
 map_pixel = int(map_size/grid_size)
 
 observation_pixel = int(observation_range/grid_size)
@@ -249,12 +249,27 @@ class Simu_env():
             radius = int(r/grid_size )
             height = int(255/0.5 * h )
         
-            self.terrain_map = cv2.circle(self.terrain_map, (col,row), radius, height, -1)
-        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 4)
-        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 4)
-        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 4)
-        cv2.imwrite('./data/map.png', self.terrain_map)
+            cv2.circle(self.terrain_map, (col,row), radius, height, -1)
+        ## for boundaries
+        cv2.line(self.terrain_map, (0, 0), (0, self.terrain_map.shape[1]), 255, 3)
+        cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 255, 3)
+        cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 3)
+        cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), 255, 3)
+        ## for two static obstacles
+        # -3.4, -1, 2.6, -1      -2.6, 1, 3.4, 1
+        p1_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
+        p1_c = int((-1.9 + map_shift)/grid_size)
+        p2_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
+        p2_c = int((1.1 + map_shift)/grid_size)        
+
+        p3_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
+        p3_c = int((-1.1 + map_shift)/grid_size)
+        p4_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
+        p4_c = int((1.9 + map_shift)/grid_size)     
+        cv2.line(self.terrain_map, (p1_c, p1_r), (p2_c, p2_r), 255, 1)
+        cv2.line(self.terrain_map, (p3_c, p3_r), (p4_c, p4_r), 255, 1)
+
+        cv2.imwrite('./data/auto/map.png', self.terrain_map)
         # self.terrain_map = cv2.imread('./data/map.png')
     ########################################################################################################################################
     ###################################   interface function to communicate to the simulator ###############################################

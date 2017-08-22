@@ -14,7 +14,7 @@ from environment import centauro_env
 
 load_model = True
 LOG_DIR = './data/log'
-N_WORKERS = 4 #multiprocessing.cpu_count()
+N_WORKERS = 1 #multiprocessing.cpu_count()
 print ('cpu: ', multiprocessing.cpu_count())
 MAX_GLOBAL_EP = 100000
 MAX_STEP_EP = 30

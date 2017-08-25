@@ -10,6 +10,22 @@ import matplotlib.pyplot as plt
 
 print ('import env vrep')
 
+action_list = []
+for x in range(-1, 2):
+    for y in range(-1, 2):
+        # for w in range(-1, 2):
+        #     for h in range(-1, 2):
+        #         for l in range(-1, 2):
+        action = []
+        action.append(x)
+        action.append(y)
+        action.append(0)
+        action.append(0)
+        action.append(0)
+        action_list.append(action)
+        # print action_list
+
+
 map_shift = 2.5
 observation_range = 1.5
 
@@ -22,7 +38,7 @@ observation_pixel = int(observation_range/grid_size)
 observation_image_size = observation_pixel*2
 observation_control = 8
 observation_space = observation_image_size*observation_image_size + 8  # 60 x 60 + 8
-action_space = 2
+action_space = len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
@@ -77,11 +93,10 @@ class Simu_env():
 
     def step(self, action):
         self.step_inep += 1
+        if isinstance(action, np.int32) or isinstance(action, int) or isinstance(action, np.int64):
+            action = action_list[action]
 
-        a = [0,0,0,0,0]
-        a[0] = action[0]
-        a[1] = action[1]
-        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', a)
+        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', action)
 
         robot_state = []
         for i in range(10):
@@ -120,13 +135,13 @@ class Simu_env():
         dist_theta = abs(robot_state[2] - robot_state[7])
 
         if dist < self.dist_pre:
-            reward += 0.01 #3 - dist/0.15 * 0.3
+            reward += 0.1 #3 - dist/0.15 * 0.3
         else:
-            reward -= 0.01
+            reward -= 0.1
 
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
-        if dist < 0.2:
+        if dist < 0.35:
             reward = 10
             is_finish = True
             close = True
@@ -256,19 +271,20 @@ class Simu_env():
         cv2.line(self.terrain_map, (0, 0), (self.terrain_map.shape[0], 0), 1, 3)
         cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
         cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
-        ## for two static obstacles
-        # -3.4, -1, 2.6, -1      -2.6, 1, 3.4, 1
-        p1_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
-        p1_c = int((-1.9 + map_shift)/grid_size)
-        p2_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
-        p2_c = int((1.1 + map_shift)/grid_size)        
 
-        p3_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
-        p3_c = int((-1.1 + map_shift)/grid_size)
-        p4_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
-        p4_c = int((1.9 + map_shift)/grid_size)     
-        cv2.line(self.terrain_map, (p1_c, p1_r), (p2_c, p2_r), boundary_height, 1)
-        cv2.line(self.terrain_map, (p3_c, p3_r), (p4_c, p4_r), boundary_height, 1)
+        # ## for two static obstacles
+        # # -3.4, -1, 2.6, -1      -2.6, 1, 3.4, 1
+        # p1_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
+        # p1_c = int((-1.9 + map_shift)/grid_size)
+        # p2_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
+        # p2_c = int((1.1 + map_shift)/grid_size)        
+
+        # p3_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
+        # p3_c = int((-1.1 + map_shift)/grid_size)
+        # p4_r = self.terrain_map.shape[0] - int((1 + map_shift)/grid_size)
+        # p4_c = int((1.9 + map_shift)/grid_size)     
+        # cv2.line(self.terrain_map, (p1_c, p1_r), (p2_c, p2_r), boundary_height, 1)
+        # cv2.line(self.terrain_map, (p3_c, p3_r), (p4_c, p4_r), boundary_height, 1)
 
         np.save("./data/auto/map", self.terrain_map)
         # mpimg.imsave('./data/auto/map.png', self.terrain_map)

@@ -70,8 +70,8 @@ class ACNet(object):
                     self.update_a_op = OPT_A.apply_gradients(zip(self.a_grads, globalAC.a_params))
                     self.update_c_op = OPT_C.apply_gradients(zip(self.c_grads, globalAC.c_params))
 
-                    # self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params))
-                    self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params+globalAC.encoder_params))
+                    self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params))
+                    # self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params+globalAC.encoder_params))
 
                     self.update_auto_op = OPT_Auto.apply_gradients(zip(self.auto_grids, globalAC.auto_params))
                     

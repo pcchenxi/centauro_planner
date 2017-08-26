@@ -5,7 +5,7 @@ import cv2
 from environment import centauro_env
 
 import tensorflow as tf
-import tensorflow.contrib.layers as lays
+import layers as lays
 
 from sklearn.model_selection import train_test_split
 
@@ -60,8 +60,8 @@ def create_ds():
     # plt.show()
 
     counter = 0
-    for x in np.arange(-2.5, 2.5, 0.1):
-        for y in np.arange(-2.5, 2.5, 0.1):
+    for x in np.arange(-2.5, 2.5, 0.03):
+        for y in np.arange(-2.5, 2.5, 0.03):
             grid = get_subgrid(x, y, img)
             filename = str(counter)+'.npy'
             np.save('./data/auto/' + filename, grid)
@@ -97,7 +97,7 @@ def get_batch(data_set, batch_size):
         batch.append(data_set[i])
     return batch
 
-create_ds()
+# create_ds()
 
 #############################################################################333
 
@@ -121,20 +121,81 @@ def autoencoder(inputs):
 
     return encoded_fc, decoded
 
+# def spatial_softmax(encoded):
+#     # shape = encoded.get_shape().as_list()
+
+#     layer_flatten = tf.contrib.layers.flatten(encoded)
+#     max_index = tf.argmax(layer_flatten, 1)
+
+#     return max_index
+
+def encoder_spatial_softmax(inputs):
+    with tf.variable_scope('Global_Net'):
+        with tf.variable_scope('auto'):
+            with tf.variable_scope('encoder'):
+                conv1 = lays.conv2d(inputs, 64, [7, 7], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                # conv3_normalized = conv3/max_v
+                arg_max, softmax = lays.spatial_softmax(conv3)  # 16 number
+                shape = conv3.get_shape().as_list()
+
+                row_index = (arg_max // shape[2]) / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
+                col_index = (arg_max % shape[2]) / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
+
+                expected_xy = tf.concat([row_index, col_index], 2)
+
+                arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
+                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
+
+    return conv3, softmax
+
+img_size = 15
+def decoder(spatial_softmax):
+    with tf.variable_scope('Global_Net'):
+        with tf.variable_scope('auto'):
+            with tf.variable_scope('decoder'):
+                decoded = tf.layers.dense(inputs=spatial_softmax, units=img_size*img_size*1, activation=None, name = 'decoded_fc')
+                decoded = tf.reshape(decoded, shape=[-1, img_size, img_size, 1])  
+                # decoded = lays.conv2d_transpose(decoded, 32, [3, 3], stride=1, padding='SAME')
+                # decoded = lays.conv2d_transpose(decoded, 64, [3, 3], stride=1, padding='SAME')
+                # decoded = lays.conv2d_transpose(decoded, 1, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.tanh)                
+
+    return decoded
 
 ####################################################################################
 
-batch_size = 200  # Number of samples in each batch
+def draw_keypoint(key_points):
+    img_size = 60
+    img = np.zeros((img_size, img_size), np.float32)
+    for i in range(0, len(key_points), 2):
+        key_col = (key_points[i] + 1)/2
+        key_row = (key_points[i+1] + 1)/2
+        row = int(key_col * img_size)
+        col = int(key_row * img_size)
+        # print(row, col)
+        # print (key_points[i], key_points[i+1])
+        img[row, col] = 1
+    
+    return img
+
+
+batch_size = 500  # Number of samples in each batch
 epoch_num = 9999999     # Number of epochs to train the network
 lr = 0.0001        # Learning rate
 
 ae_inputs = tf.placeholder(tf.float32, (None, 60, 60))  # input to the network (MNIST images)
 ae_inputs_reshape = tf.reshape(ae_inputs, shape=[-1, 60, 60, 1])  
+resize_input = tf.image.resize_images(ae_inputs_reshape, size=(img_size,img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+# resize_input = tf.layers.max_pooling2d(inputs=ae_inputs_reshape, pool_size=[4, 4], strides=4)
 
-encoded_fc, decoded = autoencoder(ae_inputs_reshape)  # create the Autoencoder network
+key_points_input = tf.placeholder(tf.float32, (None, 64))
+
+conv3, key_points = encoder_spatial_softmax(ae_inputs_reshape)  # create the Autoencoder network
+decoded = decoder(key_points_input)
 
 # calculate the loss and optimize the network
-loss = tf.reduce_mean(tf.square(decoded - ae_inputs_reshape))  # claculate the mean square error loss
+loss = tf.reduce_mean(tf.square(decoded - resize_input))  # claculate the mean square error loss
 train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
 
 # initialize the network
@@ -156,13 +217,13 @@ with tf.Session() as sess:
     summary_writer = tf.summary.FileWriter('data/log', sess.graph)
 
     saver = tf.train.Saver()
-    print ('Loading Model...')
-    ckpt = tf.train.get_checkpoint_state('./model/')
-    if ckpt and ckpt.model_checkpoint_path:
-        saver.restore(sess, ckpt.model_checkpoint_path)
-        print ('loaded')
-    else:
-        print ('no model file')  
+    # print ('Loading Model...')
+    # ckpt = tf.train.get_checkpoint_state('./model/')
+    # if ckpt and ckpt.model_checkpoint_path:
+    #     saver.restore(sess, ckpt.model_checkpoint_path)
+    #     print ('loaded')
+    # else:
+    #     print ('no model file')  
 
     grid_set = get_ds()
 
@@ -183,22 +244,32 @@ with tf.Session() as sess:
     for ep in range(epoch_num):  # epochs loop
         batch_img = get_batch(data_train, batch_size)
         batch_test = get_batch(data_test, batch_size)
-        _, loss_v, decoded_img = sess.run([train_op, loss, decoded], feed_dict={ae_inputs: batch_img})
-        loss_test = sess.run(loss, feed_dict={ae_inputs: batch_test})
+        conv3_img, points = sess.run([conv3, key_points], feed_dict={ae_inputs: batch_img})
+        decoded_img, loss_v, _ = sess.run([decoded, loss, train_op], feed_dict={ae_inputs: batch_img, key_points_input: points})
+
+        # loss_test = sess.run(loss, feed_dict={ae_inputs: batch_test})
+        # print(encoded_softmax)
+        # print(arg_max)
         # print(encoded_img[0,:,:,0].max(), encoded_img[0,:,:,0].shape)
         if ep % 50 == 0:
+            img = draw_keypoint(points[0])
             plt.clf()
             plt.figure(1)
             plt.imshow(batch_img[0], cmap='gray')
             plt.figure(2)
-            plt.imshow(decoded_img[0,:,:,0], cmap='gray')
+            plt.imshow(conv3_img[0,:,:,0], cmap='gray')
+            plt.figure(3)
+            plt.imshow(decoded_img[0,:,:,0], cmap='gray')    
+            plt.figure(4)
+            plt.imshow(img, cmap='gray')                       
             plt.pause(0.01)
+            # plt.show()
             if saving_model:
-                saver.save(sess, './model/grid_feature_model.cptk') 
+                saver.save(sess, './model/spatial_softmax.cptk') 
 
-        print('Epoch: {} - cost= {:.5f}'.format((ep + 1), loss_v), loss_test)
+        print('Epoch: {} - cost= {:.5f}'.format((ep + 1), loss_v))
         summary = tf.Summary()
         summary.value.add(tag='Loss/loss Train', simple_value=float(loss_v))
-        summary.value.add(tag='Loss/loss Test', simple_value=float(loss_test))
+        # summary.value.add(tag='Loss/loss Test', simple_value=float(loss_test))
         summary_writer.add_summary(summary, ep)
         summary_writer.flush() 

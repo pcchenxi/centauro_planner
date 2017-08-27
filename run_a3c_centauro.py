@@ -4,7 +4,7 @@ import tensorflow as tf
 from environment import centauro_env
 from a3c import a3c_agent, a3c_net
 
-N_WORKERS = 2 # multiprocessing.cpu_count()
+N_WORKERS = 4 # multiprocessing.cpu_count()
 
 if __name__ == "__main__":
     SESS = tf.Session()
@@ -22,13 +22,13 @@ if __name__ == "__main__":
     COORD = tf.train.Coordinator()
     SESS.run(tf.global_variables_initializer())
 
-    saver = tf.train.import_meta_graph('./model/grid_feature_model.cptk.meta')
-    saver.restore(SESS,tf.train.latest_checkpoint('./model'))
-    graph = tf.get_default_graph()
+    # saver = tf.train.import_meta_graph('./model/spatial_softmax.cptk.meta')
+    # saver.restore(SESS,tf.train.latest_checkpoint('./model'))
+    # graph = tf.get_default_graph()
 
-    auto_params_trained = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Global_Net/auto')
-    pull_auto_params_op = [l_p.assign(g_p) for l_p, g_p in zip(GLOBAL_AC.auto_params, auto_params_trained)]
-    SESS.run(pull_auto_params_op)
+    # auto_params_trained = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Global_Net/auto/encoder')
+    # pull_auto_params_op = [l_p.assign(g_p) for l_p, g_p in zip(GLOBAL_AC.encoder_params, auto_params_trained)]
+    # SESS.run(pull_auto_params_op)
 
     summary_writer = tf.summary.FileWriter('data/log', SESS.graph)
     saver = tf.train.Saver()

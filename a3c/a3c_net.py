@@ -101,12 +101,12 @@ class ACNet(object):
 
         with tf.variable_scope('actor'):
             # l_a = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
-            l_a = tf.layers.dense(self.s, 50, tf.nn.relu6, kernel_initializer=w_init, name='la2')
+            l_a = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='la2')
             
             a_prob = tf.layers.dense(l_a, N_A, tf.nn.softmax, kernel_initializer=w_init, name='ap')
         with tf.variable_scope('critic'):
             # l_c = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
-            l_c = tf.layers.dense(self.s, 50, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            l_c = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='lc')
             v = tf.layers.dense(l_c, 1, kernel_initializer=w_init, name='v')  # state value
 
         return a_prob, v, self.s

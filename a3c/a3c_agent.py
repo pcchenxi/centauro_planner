@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from a3c import a3c_net
 
 MAX_GLOBAL_EP = 100000
-UPDATE_GLOBAL_ITER = 30
+UPDATE_GLOBAL_ITER = 100
 GAMMA = 0.9
 GLOBAL_RUNNING_R = []
 GLOBAL_EP = 0
@@ -54,7 +54,7 @@ class Worker(object):
     def write_summary(self, saver, sum_reward, mean_return, c_loss, a_loss):
         global GLOBAL_EP
         print(GLOBAL_EP)
-        saver.save(self.sess, './data/model.cptk') 
+        saver.save(self.sess, './model/rl/model.cptk') 
         # if self.name == 'W_0':
         summary = tf.Summary()
 

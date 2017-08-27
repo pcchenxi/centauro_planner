@@ -136,7 +136,7 @@ def encoder_spatial_softmax(inputs):
             with tf.variable_scope('encoder'):
                 conv1 = lays.conv2d(inputs, 64, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.relu)
                 conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
-                conv3 = lays.conv2d(conv2, 8, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
                 # conv3_normalized = conv3/max_v
                 arg_max, softmax = lays.spatial_softmax(conv3)  # 16 number
                 shape = conv3.get_shape().as_list()
@@ -154,7 +154,7 @@ def encoder_spatial_softmax(inputs):
                 expected_xy = tf.concat([row_index, col_index], 2)
 
                 arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
-                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 16])  
+                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
 
     return conv3, expected_xy_reshape
 
@@ -190,14 +190,14 @@ def draw_keypoint(key_points):
 
 batch_size = 500  # Number of samples in each batch
 epoch_num = 9999999     # Number of epochs to train the network
-lr = 0.0001        # Learning rate
+lr = 0.00005        # Learning rate
 
 ae_inputs = tf.placeholder(tf.float32, (None, 60, 60))  # input to the network (MNIST images)
 ae_inputs_reshape = tf.reshape(ae_inputs, shape=[-1, 60, 60, 1])  
 # resize_input = tf.image.resize_images(ae_inputs_reshape, size=(img_size,img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 # resize_input = tf.layers.max_pooling2d(inputs=ae_inputs_reshape, pool_size=[4, 4], strides=4)
 
-key_points_input = tf.placeholder(tf.float32, (None, 16))
+key_points_input = tf.placeholder(tf.float32, (None, 64))
 
 conv3, key_points = encoder_spatial_softmax(ae_inputs_reshape)  # create the Autoencoder network
 decoded = decoder(key_points_input)
@@ -225,13 +225,13 @@ with tf.Session() as sess:
     summary_writer = tf.summary.FileWriter('data/log', sess.graph)
 
     saver = tf.train.Saver()
-    # print ('Loading Model...')
-    # ckpt = tf.train.get_checkpoint_state('./model/')
-    # if ckpt and ckpt.model_checkpoint_path:
-    #     saver.restore(sess, ckpt.model_checkpoint_path)
-    #     print ('loaded')
-    # else:
-    #     print ('no model file')  
+    print ('Loading Model...')
+    ckpt = tf.train.get_checkpoint_state('./model/auto/')
+    if ckpt and ckpt.model_checkpoint_path:
+        saver.restore(sess, ckpt.model_checkpoint_path)
+        print ('loaded')
+    else:
+        print ('no model file')  
 
     grid_set = get_ds()
 

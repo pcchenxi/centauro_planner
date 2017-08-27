@@ -19,6 +19,17 @@ function step(inInts,inFloats,inStrings,inBuffer)
     return {}, {}, {}, res
 end
 
+function move_robot(inInts,inFloats,inStrings,inBuffer)
+    -- print('step')
+    local robot_pos = simGetObjectPosition(_robot_hd, -1)
+    robot_pos[1] =  inFloats[1]
+    robot_pos[2] =  inFloats[2]
+
+    simSetObjectPosition(_robot_hd, -1, robot_pos)
+    -- sample_obstacle_position(obs_hds, #obs_hds)
+    return {}, {}, {}, ''
+end
+
 function get_obstacle_info(inInts,inFloats,inStrings,inBuffer)
     local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
     local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)

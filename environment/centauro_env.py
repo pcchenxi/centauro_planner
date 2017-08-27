@@ -79,12 +79,6 @@ class Simu_env():
         return state
 
     def reset(self):
-        # time.sleep(2)
-        # vrep.simxStopSimulation(self.clientID, vrep.simx_opmode_oneshot)
-        # time.sleep(0.5)
-        # vrep.simxStartSimulation(self.clientID, vrep.simx_opmode_oneshot)
-        # time.sleep(1)
-
         self.step_inep = 0
 
         res, retInts, retFloats, retStrings, retBuffer = self.call_sim_function('centauro', 'reset', [observation_range*2])        
@@ -141,10 +135,10 @@ class Simu_env():
 
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
-        if dist < 0.35:
-            reward = 10
+        if dist < 0.3:
+            reward = 5
             is_finish = True
-            close = True
+            # close = True
         # if dist < 0.1:
         #     reward += 0.05            
         #     close = True
@@ -160,10 +154,11 @@ class Simu_env():
 
         # if close and dist_h < 0.02 and dist_l < 0.02 and dist_theta < 0.02:     
         #     reward = 4    
+        #     is_finish = True
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
             is_finish = True 
-            reward = -10
+            reward = -5
 
         # if abs(robot_state[0] - robot_state[5]) > 0.05:
         #     reward = -1
@@ -242,7 +237,7 @@ class Simu_env():
         # print(start_r, end_r, start_c, end_c)
         # print(sub_start_r, sub_end_r, sub_start_c, sub_end_c)
         self.obs_grid.fill(0)
-        self.obs_grid[sub_start_r:sub_end_r, sub_start_c:sub_end_c] = self.terrain_map[start_r:end_r, start_c:end_c]
+        # self.obs_grid[sub_start_r:sub_end_r, sub_start_c:sub_end_c] = self.terrain_map[start_r:end_r, start_c:end_c]
 
         return self.obs_grid 
 
@@ -272,7 +267,7 @@ class Simu_env():
         cv2.line(self.terrain_map, (0, self.terrain_map.shape[1]), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
         cv2.line(self.terrain_map, (self.terrain_map.shape[0], 0), (self.terrain_map.shape[0], self.terrain_map.shape[1]), boundary_height, 3)
 
-        # ## for two static obstacles
+        # # ## for two static obstacles
         # # -3.4, -1, 2.6, -1      -2.6, 1, 3.4, 1
         # p1_r = self.terrain_map.shape[0] - int((-1 + map_shift)/grid_size)
         # p1_c = int((-1.9 + map_shift)/grid_size)

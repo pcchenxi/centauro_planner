@@ -1,5 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as lays
+from layers import spatial_softmax
 import numpy as np
 from environment import centauro_env
 
@@ -21,18 +22,17 @@ class ACNet(object):
         if scope == GLOBAL_NET_SCOPE:   # get global network
             with tf.variable_scope(scope):
                 self.s = tf.placeholder(tf.float32, [None, N_S], 'S')
-                self.a_prob, self.v, self.ori_grid, self.decoded_grid = self._build_net(scope)
-                self.a_params, self.c_params, self.auto_params, self.encoder_params = self._get_params(scope)
+                self.a_prob, self.v, self.keypoints = self._build_net(scope)
+                self.a_params, self.c_params, self.encoder_params = self._get_params(scope)
                 self.all_aprams = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
-                # self.pull_auto_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.auto_params, globalAC.auto_params)]
         else:   # local net, calculate losses
             with tf.variable_scope(scope):
                 self.s = tf.placeholder(tf.float32, [None, N_S], 'S')
                 self.a_his = tf.placeholder(tf.int32, [None, ], 'A')
                 self.v_target = tf.placeholder(tf.float32, [None, 1], 'Vtarget')
 
-                self.a_prob, self.v, self.ori_grid, self.decoded_grid = self._build_net(scope)
-                self.a_params, self.c_params, self.auto_params, self.encoder_params = self._get_params(scope)
+                self.a_prob, self.v, self.keypoints = self._build_net(scope)
+                self.a_params, self.c_params, self.encoder_params = self._get_params(scope)
 
                 td = tf.subtract(self.v_target, self.v, name='TD_error')
                 with tf.name_scope('c_loss'):
@@ -49,14 +49,10 @@ class ACNet(object):
                 with tf.name_scope('ac_loss'):
                     self.ac_loss = self.c_loss*0.5 + self.a_loss
 
-                with tf.name_scope('auto_ed_loss'):
-                    self.auto_ed_loss = tf.reduce_mean(tf.square(self.decoded_grid - self.ori_grid))
-
                 with tf.name_scope('local_grad'):
                     self.a_grads = tf.gradients(self.a_loss, self.a_params)
                     self.c_grads = tf.gradients(self.c_loss, self.c_params)
                     self.ac_grads = tf.gradients(self.ac_loss, self.a_params + self.c_params)
-                    self.auto_grids = tf.gradients(self.auto_ed_loss, self.auto_params)
 
             with tf.name_scope('sync'):
                 with tf.name_scope('pull'):
@@ -64,7 +60,6 @@ class ACNet(object):
                     self.pull_c_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.c_params, globalAC.c_params)]
                     # auto encoder and decoder
                     self.pull_encoder_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.encoder_params, globalAC.encoder_params)]
-                    self.pull_auto_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.auto_params, globalAC.auto_params)]
 
                 with tf.name_scope('push'):
                     self.update_a_op = OPT_A.apply_gradients(zip(self.a_grads, globalAC.a_params))
@@ -72,8 +67,6 @@ class ACNet(object):
 
                     self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params))
                     # self.update_ac_op = OPT_A.apply_gradients(zip(self.ac_grads, globalAC.a_params+globalAC.c_params+globalAC.encoder_params))
-
-                    self.update_auto_op = OPT_Auto.apply_gradients(zip(self.auto_grids, globalAC.auto_params))
                     
     def _build_net(self, scope):
         w_init = tf.random_normal_initializer(0., .1)
@@ -85,57 +78,58 @@ class ACNet(object):
 
         with tf.variable_scope('auto'):
             with tf.variable_scope('encoder'):
-                encoded = lays.conv2d(reshaped_grid, 32, [5, 5], stride=1, padding='SAME')
-                encoded = lays.conv2d(encoded, 64, [4, 4], stride=1, padding='SAME')
-                encoded = lays.conv2d(encoded, 64, [3, 3], stride=1, padding='SAME')
-                encoded_flat = tf.contrib.layers.flatten(encoded)  # 32*32*64
-                encoded_fc = tf.layers.dense(inputs=encoded_flat, units=60, activation=tf.nn.relu6, name = 'encoded_fc')
-            with tf.variable_scope('decoder'):
-                decoded_fc = tf.layers.dense(inputs=encoded_fc, units=60*60*64, activation=tf.nn.relu6, name = 'decoded_fc')
-                encoded_reshape = tf.reshape(decoded_fc, shape=[-1, 60, 60, 64])  
-                decoded = lays.conv2d_transpose(encoded_reshape, 64, [3, 3], stride=1, padding='SAME')
-                decoded = lays.conv2d_transpose(decoded, 32, [4, 4], stride=1, padding='SAME')
-                decoded = lays.conv2d_transpose(decoded, 1, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.tanh)
+                conv1 = lays.conv2d(reshaped_grid, 64, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.relu)
+                conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                # conv3_normalized = conv3/max_v
+                arg_max, softmax = spatial_softmax(conv3)  # 16 number
+                shape = conv3.get_shape().as_list()
 
-        # concat
-        feature = tf.concat([encoded_fc, reshaped_robot_state], 1, name = 'concat')
+                divide = arg_max // shape[2]
+                divide_int = tf.cast(divide, tf.int64)
+                mod = arg_max - divide_int*shape[2]
+                row_index = divide / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
+                col_index = mod / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
+
+                expected_xy = tf.concat([row_index, col_index], 2)
+
+                arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
+                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
+                expected_xy_float32 = tf.cast(expected_xy_reshape, tf.float32)
+
+        feature = tf.concat([expected_xy_float32, reshaped_robot_state], 1, name = 'concat')
 
         with tf.variable_scope('actor'):
-            l_a = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            # l_a = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            l_a = tf.layers.dense(self.s, 50, tf.nn.relu6, kernel_initializer=w_init, name='la2')
+            
             a_prob = tf.layers.dense(l_a, N_A, tf.nn.softmax, kernel_initializer=w_init, name='ap')
         with tf.variable_scope('critic'):
-            l_c = tf.layers.dense(feature, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            # l_c = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            l_c = tf.layers.dense(self.s, 50, tf.nn.relu6, kernel_initializer=w_init, name='lc')
             v = tf.layers.dense(l_c, 1, kernel_initializer=w_init, name='v')  # state value
 
-        return a_prob, v, reshaped_grid, decoded
+        return a_prob, v, self.s
 
     def _get_params(self, scope):
         a_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/actor')
         c_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/critic')
         encoder_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/auto/encoder')
-        auto_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/auto')
 
-        return a_params, c_params, auto_params, encoder_params
+        return a_params, c_params, encoder_params
 
     # update function
     def update_ac_global(self, feed_dict):  # run by a local
-        # _, _, a_loss, v_loss, total_loss, auto_loss = self.SESS.run([self.update_a_op, self.update_c_op, self.a_loss, self.c_loss, self.ac_loss, self.auto_ed_loss], feed_dict)  # local grads applies to global net
-        _, a_loss, v_loss, total_loss, auto_loss = self.SESS.run([self.update_ac_op, self.a_loss, self.c_loss, self.ac_loss, self.auto_ed_loss], feed_dict)  # local grads applies to global net
-        return a_loss, v_loss, total_loss, auto_loss 
+        _, _, a_loss, v_loss, value = self.SESS.run([self.update_a_op, self.update_c_op, self.a_loss, self.c_loss, self.v], feed_dict)  # local grads applies to global net
+        # _, a_loss, v_loss, value = self.SESS.run([self.update_ac_op, self.a_loss, self.c_loss, self.v], feed_dict)  # local grads applies to global net
+        return a_loss, v_loss, value 
         
-    def update_auto_global(self, feed_dict):  # run by a local
-        print('in update')
-        loss = self.SESS.run(self.auto_ed_loss, feed_dict)  # local grads applies to global net
-        # _, loss, decoded = self.SESS.run([self.update_auto_op, self.auto_ed_loss, self.decoded_grid], feed_dict)  # local grads applies to global net
-        print('finish update')
-        return loss, decoded
     # pull function
     def pull_ac_global(self):  # run by a local
-        self.SESS.run([self.pull_a_params_op, self.pull_c_params_op, self.pull_encoder_params_op])
+        self.SESS.run([self.pull_a_params_op, self.pull_c_params_op])
 
     def pull_auto_global(self):  # run by a local
-        self.SESS.run(self.pull_auto_params_op)
-
+        self.SESS.run(self.encoder_params)
 
     def choose_action(self, s):  # run by a local
         prob_weights = self.SESS.run(self.a_prob, feed_dict={self.s: s[np.newaxis, :]})

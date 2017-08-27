@@ -97,7 +97,7 @@ def get_batch(data_set, batch_size):
         batch.append(data_set[i])
     return batch
 
-# create_ds()
+create_ds()
 
 #############################################################################333
 
@@ -129,37 +129,45 @@ def autoencoder(inputs):
 
 #     return max_index
 
+
 def encoder_spatial_softmax(inputs):
     with tf.variable_scope('Global_Net'):
         with tf.variable_scope('auto'):
             with tf.variable_scope('encoder'):
-                conv1 = lays.conv2d(inputs, 64, [7, 7], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv1 = lays.conv2d(inputs, 64, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.relu)
                 conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
-                conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+                conv3 = lays.conv2d(conv2, 8, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
                 # conv3_normalized = conv3/max_v
                 arg_max, softmax = lays.spatial_softmax(conv3)  # 16 number
                 shape = conv3.get_shape().as_list()
 
-                row_index = (arg_max // shape[2]) / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
-                col_index = (arg_max % shape[2]) / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
+                divide = arg_max // shape[2]
+                divide_int = tf.cast(divide, tf.int64)
+                mod = arg_max - divide_int*shape[2]
+                # row_index = divide / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
+                # mod = arg_max - divide*shape[2]
+                # col_index = mod / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
+
+                row_index = divide / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
+                col_index = mod / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
 
                 expected_xy = tf.concat([row_index, col_index], 2)
 
                 arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
-                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
+                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 16])  
 
-    return conv3, softmax
+    return conv3, expected_xy_reshape
 
-img_size = 15
+img_size = 30
 def decoder(spatial_softmax):
     with tf.variable_scope('Global_Net'):
         with tf.variable_scope('auto'):
             with tf.variable_scope('decoder'):
-                decoded = tf.layers.dense(inputs=spatial_softmax, units=img_size*img_size*1, activation=None, name = 'decoded_fc')
-                decoded = tf.reshape(decoded, shape=[-1, img_size, img_size, 1])  
-                # decoded = lays.conv2d_transpose(decoded, 32, [3, 3], stride=1, padding='SAME')
-                # decoded = lays.conv2d_transpose(decoded, 64, [3, 3], stride=1, padding='SAME')
-                # decoded = lays.conv2d_transpose(decoded, 1, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.tanh)                
+                decoded = tf.layers.dense(inputs=spatial_softmax, units=img_size*img_size*32, activation=None, name = 'decoded_fc')
+                decoded = tf.reshape(decoded, shape=[-1, img_size, img_size, 32])  
+                decoded = lays.conv2d_transpose(decoded, 32, [5, 5], stride=1, padding='SAME')
+                decoded = lays.conv2d_transpose(decoded, 64, [5, 5], stride=1, padding='SAME')
+                decoded = lays.conv2d_transpose(decoded, 1, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.tanh)                
 
     return decoded
 
@@ -186,16 +194,16 @@ lr = 0.0001        # Learning rate
 
 ae_inputs = tf.placeholder(tf.float32, (None, 60, 60))  # input to the network (MNIST images)
 ae_inputs_reshape = tf.reshape(ae_inputs, shape=[-1, 60, 60, 1])  
-resize_input = tf.image.resize_images(ae_inputs_reshape, size=(img_size,img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+# resize_input = tf.image.resize_images(ae_inputs_reshape, size=(img_size,img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 # resize_input = tf.layers.max_pooling2d(inputs=ae_inputs_reshape, pool_size=[4, 4], strides=4)
 
-key_points_input = tf.placeholder(tf.float32, (None, 64))
+key_points_input = tf.placeholder(tf.float32, (None, 16))
 
 conv3, key_points = encoder_spatial_softmax(ae_inputs_reshape)  # create the Autoencoder network
 decoded = decoder(key_points_input)
 
 # calculate the loss and optimize the network
-loss = tf.reduce_mean(tf.square(decoded - resize_input))  # claculate the mean square error loss
+loss = tf.reduce_mean(tf.square(decoded - ae_inputs_reshape))  # claculate the mean square error loss
 train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
 
 # initialize the network
@@ -264,8 +272,8 @@ with tf.Session() as sess:
             plt.imshow(img, cmap='gray')                       
             plt.pause(0.01)
             # plt.show()
-            if saving_model:
-                saver.save(sess, './model/spatial_softmax.cptk') 
+            # if saving_model:
+            #     saver.save(sess, './model/spatial_softmax.cptk') 
 
         print('Epoch: {} - cost= {:.5f}'.format((ep + 1), loss_v))
         summary = tf.Summary()

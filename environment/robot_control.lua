@@ -1,4 +1,4 @@
-package.path=package.path .. ";/home/xi/workspace/a3c_palnner/environment/?.lua"
+package.path=package.path .. ";/home/xi/workspace/centauro_planer/environment/?.lua"
 require("get_set")
 
 -- action: vx, vy, vw, vl

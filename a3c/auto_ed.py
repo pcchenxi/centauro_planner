@@ -253,13 +253,14 @@ with tf.Session() as sess:
         batch_img = get_batch(data_train, batch_size)
         batch_test = get_batch(data_test, batch_size)
         conv3_img, points = sess.run([conv3, key_points], feed_dict={ae_inputs: batch_img})
-        decoded_img, loss_v, _ = sess.run([decoded, loss, train_op], feed_dict={ae_inputs: batch_img, key_points_input: points})
+        # decoded_img, loss_v, _ = sess.run([decoded, loss, train_op], feed_dict={ae_inputs: batch_img, key_points_input: points})
+        decoded_img, loss_v= sess.run([decoded, loss], feed_dict={ae_inputs: batch_img, key_points_input: points})
 
         # loss_test = sess.run(loss, feed_dict={ae_inputs: batch_test})
         # print(encoded_softmax)
         # print(arg_max)
         # print(encoded_img[0,:,:,0].max(), encoded_img[0,:,:,0].shape)
-        if ep % 50 == 0:
+        if ep % 10 == 0:
             img = draw_keypoint(points[0])
             plt.clf()
             plt.figure(1)

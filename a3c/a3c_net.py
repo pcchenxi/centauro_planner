@@ -70,43 +70,45 @@ class ACNet(object):
                     
     def _build_net(self, scope):
         w_init = tf.random_normal_initializer(0., .1)
-        num_img = N_image_size*N_image_size
-        self.grid = tf.slice(self.s, [0, 0], [-1, num_img])
-        self.robot_state = tf.slice(self.s, [0, num_img], [-1, N_robot_state_size])
-        reshaped_grid = tf.reshape(self.grid,shape=[-1, N_image_size, N_image_size, 1]) 
-        reshaped_robot_state = tf.reshape(self.robot_state,shape=[-1, N_robot_state_size])  
+        # num_img = N_image_size*N_image_size
+        # self.grid = tf.slice(self.s, [0, 0], [-1, num_img])
+        # self.robot_state = tf.slice(self.s, [0, num_img], [-1, N_robot_state_size])
+        # reshaped_grid = tf.reshape(self.grid,shape=[-1, N_image_size, N_image_size, 1]) 
+        # reshaped_robot_state = tf.reshape(self.robot_state,shape=[-1, N_robot_state_size])  
 
-        with tf.variable_scope('auto'):
-            with tf.variable_scope('encoder'):
-                conv1 = lays.conv2d(reshaped_grid, 64, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.relu)
-                conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
-                conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
-                # conv3_normalized = conv3/max_v
-                arg_max, softmax = spatial_softmax(conv3)  # 16 number
-                shape = conv3.get_shape().as_list()
+        # with tf.variable_scope('auto'):
+        #     with tf.variable_scope('encoder'):
+        #         conv1 = lays.conv2d(reshaped_grid, 64, [7, 7], stride=2, padding='SAME', activation_fn=tf.nn.relu)
+        #         conv2 = lays.conv2d(conv1,32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+        #         conv3 = lays.conv2d(conv2, 32, [5, 5], stride=1, padding='SAME', activation_fn=tf.nn.relu)
+        #         # conv3_normalized = conv3/max_v
+        #         arg_max, softmax = spatial_softmax(conv3)  # 16 number
+        #         shape = conv3.get_shape().as_list()
 
-                divide = arg_max // shape[2]
-                divide_int = tf.cast(divide, tf.int64)
-                mod = arg_max - divide_int*shape[2]
-                row_index = divide / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
-                col_index = mod / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
+        #         divide = arg_max // shape[2]
+        #         divide_int = tf.cast(divide, tf.int64)
+        #         mod = arg_max - divide_int*shape[2]
+        #         row_index = divide / shape[2] *2 -1 #tf.divide(arg_max, shape[2])
+        #         col_index = mod / shape[2] *2 -1 #tf.mod(arg_max, shape[2])
 
-                expected_xy = tf.concat([row_index, col_index], 2)
+        #         expected_xy = tf.concat([row_index, col_index], 2)
 
-                arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
-                expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
-                expected_xy_float32 = tf.cast(expected_xy_reshape, tf.float32)
+        #         arg_max_reshape = tf.reshape(arg_max, shape=[-1, 16])  
+        #         expected_xy_reshape = tf.reshape(expected_xy, shape=[-1, 64])  
+        #         expected_xy_float32 = tf.cast(expected_xy_reshape, tf.float32)
 
-        feature = tf.concat([expected_xy_float32, reshaped_robot_state], 1, name = 'concat')
+        # feature = tf.concat([expected_xy_float32, reshaped_robot_state], 1, name = 'concat')
 
         with tf.variable_scope('actor'):
-            # l_a = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
-            l_a = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='la2')
+            # feature = tf.layers.dense(feature, 256, tf.nn.relu6, kernel_initializer=w_init, name='feature_fc')
+
+            l_a = tf.layers.dense(self.s, 100, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            l_a = tf.layers.dense(l_a, 50, tf.nn.relu6, kernel_initializer=w_init, name='la2')
             
             a_prob = tf.layers.dense(l_a, N_A, tf.nn.softmax, kernel_initializer=w_init, name='ap')
         with tf.variable_scope('critic'):
             # l_c = tf.layers.dense(feature, 1, tf.nn.relu6, kernel_initializer=w_init, name='la')
-            l_c = tf.layers.dense(feature, 50, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            l_c = tf.layers.dense(self.s, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
             v = tf.layers.dense(l_c, 1, kernel_initializer=w_init, name='v')  # state value
 
         return a_prob, v, self.s

@@ -11,37 +11,10 @@ from sklearn.model_selection import train_test_split
 from a3c import a3c_net
 
 MAX_GLOBAL_EP = 100000
-UPDATE_GLOBAL_ITER = 100
-GAMMA = 0.9
+UPDATE_GLOBAL_ITER = 50
+GAMMA = 0.95
 GLOBAL_RUNNING_R = []
 GLOBAL_EP = 0
-
-auto_epoch_num = 1000
-auto_batch_size = 100
-
-def get_ds():
-    list = os.listdir('./data/auto/') 
-    ds_size = len(list) -1
-
-    grid_set = []
-    for i in range(ds_size):
-        filename = './data/auto/' + str(i) + '.npy'
-        grid = np.load(filename)
-        robot_state = np.zeros(8, np.float32)
-        state = np.append(grid.flatten(), robot_state)
-        grid_set.append(state)
-        # print(state.shape)
-
-    print(len(grid_set))
-    return grid_set
-
-def get_batch(data_set, batch_size):
-    data_range = int(len(data_set))
-    index = np.random.choice(data_range, batch_size)
-    batch = []
-    for i in index:
-        batch.append(data_set[i])
-    return batch
 
 class Worker(object):
     def __init__(self, sess, name, env, summary_writer, globalAC):
@@ -112,9 +85,10 @@ class Worker(object):
         while GLOBAL_EP < MAX_GLOBAL_EP:
             self.AC.pull_ac_global()         
             s = self.env.reset()
-            ep_r = 0
+            buffer_s, buffer_a, buffer_r = [], [], []
             total_step = 1
             GLOBAL_EP += 1
+            ep_r = 0
             while True:
                 # if self.name == 'W_0':
                 #     self.env.render()
@@ -155,14 +129,15 @@ class Worker(object):
                     # self.AC.pull_ac_global()
                     # self.AC.pull_auto_global()
 
-                    print('reward: ', buffer_r)
-                    print('true:   ', buffer_v_target.flatten())
-                    print('predict:', value.flatten())
-                    print(a_loss, c_loss)
+                    # print('reward: ', buffer_r)
+                    # print('true:   ', buffer_v_target.flatten())
+                    # print('predict:', value.flatten())
+                    # print(a_loss, c_loss)
 
                     sum_reward = np.sum(buffer_r)
-                    mean_return = np.mean(buffer_r)
-                    self.write_summary(saver, sum_reward, mean_return, c_loss, a_loss)
+                    mean_return = np.mean(buffer_v_target)
+                    print(self.name, GLOBAL_EP, sum_reward, buffer_v_target[0], value[0])
+                    self.write_summary(saver, sum_reward, buffer_v_target[0], c_loss, a_loss)
 
                     buffer_s, buffer_a, buffer_r = [], [], []
                     # print('updated', total_loss)

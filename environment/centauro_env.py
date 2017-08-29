@@ -14,8 +14,8 @@ action_list = []
 for x in range(-1, 2):
     for y in range(-1, 2):
         # for w in range(-1, 2):
-        #     for h in range(-1, 2):
-        #         for l in range(-1, 2):
+            # for h in range(-1, 2):
+            #     for l in range(-1, 2):
         action = []
         action.append(x)
         action.append(y)
@@ -37,8 +37,8 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = observation_image_size*observation_image_size + 8  # 60 x 60 + 8
-action_space = len(action_list)
+observation_space = 22 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+action_space = 2 #len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
@@ -73,8 +73,8 @@ class Simu_env():
         state = np.asarray(state)
         # print(len(state))
 
-        state = np.append(obs_grid, state)
-        state = state.flatten()
+        # state = np.append(obs_grid, state)
+        # state = state.flatten()
 
         return state
 
@@ -90,14 +90,18 @@ class Simu_env():
         if isinstance(action, np.int32) or isinstance(action, int) or isinstance(action, np.int64):
             action = action_list[action]
 
-        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', action)
+        a = [0,0,0,0,0]
+        a[0] = action[0]
+        a[1] = action[1] 
+
+        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', a)
 
         robot_state = []
         for i in range(10):
             _, _, robot_state, _, _ = self.call_sim_function('centauro', 'get_robot_state') # x, y, theta, h, l,   ////   tx, ty t_theta, th, tl
             if len(robot_state) != 0:
                 break
-            # print((robot_state))
+        # print((robot_state))
 
         obs_grid = self.get_observation_gridmap(robot_state[0], robot_state[1])
 
@@ -115,27 +119,30 @@ class Simu_env():
         close = False 
 
         action = np.asarray(action)
-        reward =  0 #-np.sum(abs(action)) * 0.1
+        reward = 0 # - np.sum(abs(action[3:])) * 0.1
         # print(action, reward)
         current_h = robot_state[3]
         target_h = robot_state[8]
 
         dist_x = robot_state[5]
         dist_y = robot_state[6]
+        dist_squre = (dist_x*dist_x + dist_y*dist_y)
         dist = math.sqrt(dist_x*dist_x + dist_y*dist_y)
 
         dist_h = abs(current_h - target_h)
         dist_l = abs(robot_state[4] - robot_state[9])
         dist_theta = abs(robot_state[2] - robot_state[7])
 
-        if dist < self.dist_pre:
-            reward += 0.1 #3 - dist/0.15 * 0.3
-        else:
+        # reward += np.exp(-dist_squre)
+
+        if dist >= self.dist_pre:
+            # reward += 0.1 #3 - dist/0.15 * 0.3
+        # else:
             reward -= 0.1
 
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
-        if dist < 0.3:
+        if dist < 0.2:
             reward = 5
             is_finish = True
             # close = True
@@ -153,7 +160,7 @@ class Simu_env():
         #     reward += 0.03
 
         # if close and dist_h < 0.02 and dist_l < 0.02 and dist_theta < 0.02:     
-        #     reward = 4    
+        #     reward = 5    
         #     is_finish = True
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
@@ -237,7 +244,7 @@ class Simu_env():
         # print(start_r, end_r, start_c, end_c)
         # print(sub_start_r, sub_end_r, sub_start_c, sub_end_c)
         self.obs_grid.fill(0)
-        # self.obs_grid[sub_start_r:sub_end_r, sub_start_c:sub_end_c] = self.terrain_map[start_r:end_r, start_c:end_c]
+        self.obs_grid[sub_start_r:sub_end_r, sub_start_c:sub_end_c] = self.terrain_map[start_r:end_r, start_c:end_c]
 
         return self.obs_grid 
 

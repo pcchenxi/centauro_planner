@@ -74,8 +74,57 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
 
     state[9] = 0.1
     state[10] = 0.0
+
+    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
+    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
+    for i=1, #obstacle_dynamic_hds, 1 do 
+        local obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], _robot_hd)
+        local obs_pos_global = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+        -- local res, type, dim = simGetShapeGeomInfo(obstacle_dynamic_hds[i])
+        
+        local x = math.abs(obs_pos_global[1])
+        local y = math.abs(obs_pos_global[2])
+
+        if x < 2.5 and y < 2.5 then 
+            state[#state+1] = obs_pos[1]
+            state[#state+1] = obs_pos[2] 
+        end
+    end
+
     -- print ('in get robot state:', #state[3])
     return {}, state, {}, ''
+end
+
+function sample_obstacle_position()
+    local v = 0.02
+    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
+    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
+    for i=1, #obstacle_dynamic_hds, 1 do
+        obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+
+        local x = math.abs(obs_pos[1])
+        local y = math.abs(obs_pos[2])
+
+        local bound = 1.5
+        if x < 2.5 and y < 2.5 then 
+            obs_pos[1] = (math.random()-0.5)*2 * bound --+ obs_pos[1]
+            obs_pos[2] = (math.random()-0.5)*2 * bound--+ obs_pos[2]
+
+            if obs_pos[1] > bound then
+                obs_pos[1] = bound
+            elseif obs_pos[1] < -bound then 
+                obs_pos[1] = -bound
+            end
+
+            if obs_pos[2] > bound then
+                obs_pos[2] = bound
+            elseif obs_pos[2] < -bound then 
+                obs_pos[2] = -bound
+            end
+        end
+        -- print(obs_pos[1], obs_pos[2])
+        simSetObjectPosition(obstacle_dynamic_hds[i], -1, obs_pos)
+    end
 end
 
 function generate_path()
@@ -119,6 +168,7 @@ end
 function start()
     -- sleep (3)
     -- print('reset')
+    _fake_robot_hd = simGetObjectHandle('fake_robot')
     _robot_hd = simGetObjectHandle('centauro')
     _robot_body_hd = simGetObjectHandle('body_ref')
     _target_hd = simGetObjectHandle('target')
@@ -133,40 +183,58 @@ function start()
     -- print (_start_pos[1], _start_pos[2])
 end
 
-function init(radius)
-    -- print('reset')
-    -- print(_start_pos[1], _start_pos[2], _start_pos[3])
-    -- print(_start_joint_values[9], _start_joint_values[10], _start_joint_values[11], _start_joint_values[12])
+function sample_initial_poses(radius)
 
-    simSetObjectPosition(_robot_hd, -1, _start_pos)
-    simSetObjectQuaternion(_robot_hd, -1, _start_ori)
-    set_joint_values(_joint_hds, _start_joint_values)
-    simSwitchThread()
+    sample_obstacle_position()
 
-    -- -- forbidThreadSwitches(true)
-    -- -- set target --
-    -- local robot_pos = _start_pos
-    -- local robot_ori = _start_ori
+    local robot_pos = {}
+    robot_pos[1] = (math.random() - 0.5) * 1
+    robot_pos[2] = (math.random() - 0.5) * 1
+    robot_pos[3] = _start_pos[3]
 
-    -- robot_pos[1] = _start_pos[1] 
-    -- robot_pos[2] = _start_pos[2]
-    -- robot_pos[3] = _start_pos[3]
+    local robot_ori = {}
+    robot_ori[1] = _start_ori[1]
+    robot_ori[2] = _start_ori[2]
+    robot_ori[3] = (math.random() - 0.5) *2 * math.pi    --_start_ori[3]
+    robot_ori[4] = _start_ori[4]
 
-    -- robot_ori[3] = 0
+    simSetObjectPosition(_robot_hd, -1, robot_pos)
+    simSetObjectQuaternion(_robot_hd, -1, robot_ori)
+    -- set_joint_values(_joint_hds, _start_joint_values)
 
     local target_pos = {}
-    target_pos[1] = (math.random() - 0.5) * radius + _start_pos[1]
-    target_pos[2] = (math.random() - 0.5) * radius + _start_pos[2]
+    target_pos[1] = (math.random() - 0.5) * radius + robot_pos[1]
+    target_pos[2] = (math.random() - 0.5) * radius + robot_pos[2]
     target_pos[3] = _start_pos[3]
 
     local target_ori = {} 
     target_ori[1] = _start_ori[1] 
     target_ori[2] = _start_ori[2]
-    target_ori[3] = (math.random() - 0.5) * 2 * math.pi
+    target_ori[3] = robot_ori[3] --(math.random() - 0.5) * 2 * math.pi
     target_ori[4] = _start_ori[4]
 
     simSetObjectPosition(_target_hd,-1,target_pos)
     simSetObjectQuaternion(_target_hd, -1, target_ori)
+    simSetObjectPosition(_fake_robot_hd,-1,target_pos)
+    simSetObjectQuaternion(_fake_robot_hd, -1, target_ori)
+
+    local res_robot = simCheckCollision(_robot_hd, _collection_hd)
+    local res_target = simCheckCollision(_fake_robot_hd, _collection_hd)
+
+    -- print (res_robot, res_target)
+    return res_robot+res_target
+
+end
+
+function init(radius)
+    local init_value = 1
+    while (init_value ~= 0) do
+        init_value = sample_initial_poses(radius)
+    end
+
+    -- print('reset')
+    -- print(_start_pos[1], _start_pos[2], _start_pos[3])
+    -- print(_start_joint_values[9], _start_joint_values[10], _start_joint_values[11], _start_joint_values[12])
 
     -- sleep(5)
     -- simSetModelProperty(_robot_hd, 32)
@@ -177,7 +245,7 @@ initialized = false
 
 -- get_obstacle_info(nil, nil, nil, nil)
 start()
--- init()
+init(1.5)
 -- simSetModelProperty(_robot_hd, 32)
 
 -- print(_start_pos[1], _start_pos[2], _start_ori[3])

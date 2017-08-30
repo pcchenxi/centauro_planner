@@ -1,0 +1,2 @@
+model_checkpoint_path: "spatial_softmax.cptk"
+all_model_checkpoint_paths: "spatial_softmax.cptk"

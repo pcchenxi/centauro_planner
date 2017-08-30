@@ -37,7 +37,7 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = 22 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+observation_space = 28 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
 action_space = 2 #len(action_list)
 
 class Simu_env():
@@ -85,7 +85,7 @@ class Simu_env():
         state, reward, is_finish, info = self.step([0, 0, 0, 0, 0])
         return state
 
-    def step(self, action):
+    def step(self, action): 
         self.step_inep += 1
         if isinstance(action, np.int32) or isinstance(action, int) or isinstance(action, np.int64):
             action = action_list[action]
@@ -133,17 +133,17 @@ class Simu_env():
         dist_l = abs(robot_state[4] - robot_state[9])
         dist_theta = abs(robot_state[2] - robot_state[7])
 
-        # reward += np.exp(-dist_squre)
-
-        if dist >= self.dist_pre:
-            # reward += 0.1 #3 - dist/0.15 * 0.3
-        # else:
-            reward -= 0.1
+        reward += np.exp(-dist_squre)
+# 
+        if dist < self.dist_pre:
+            reward = np.exp(-dist_squre)
+        else:
+            reward = -np.exp(-dist_squre)
 
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
         if dist < 0.2:
-            reward = 5
+            reward = 1
             is_finish = True
             # close = True
         # if dist < 0.1:
@@ -165,7 +165,7 @@ class Simu_env():
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
             is_finish = True 
-            reward = -5
+            reward = -2
 
         # if abs(robot_state[0] - robot_state[5]) > 0.05:
         #     reward = -1

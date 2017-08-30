@@ -95,38 +95,6 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
     return {}, state, {}, ''
 end
 
-function sample_obstacle_position()
-    local v = 0.02
-    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
-    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
-    for i=1, #obstacle_dynamic_hds, 1 do
-        obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
-
-        local x = math.abs(obs_pos[1])
-        local y = math.abs(obs_pos[2])
-
-        local bound = 1.5
-        if x < 2.5 and y < 2.5 then 
-            obs_pos[1] = (math.random()-0.5)*2 * bound --+ obs_pos[1]
-            obs_pos[2] = (math.random()-0.5)*2 * bound--+ obs_pos[2]
-
-            if obs_pos[1] > bound then
-                obs_pos[1] = bound
-            elseif obs_pos[1] < -bound then 
-                obs_pos[1] = -bound
-            end
-
-            if obs_pos[2] > bound then
-                obs_pos[2] = bound
-            elseif obs_pos[2] < -bound then 
-                obs_pos[2] = -bound
-            end
-        end
-        -- print(obs_pos[1], obs_pos[2])
-        simSetObjectPosition(obstacle_dynamic_hds[i], -1, obs_pos)
-    end
-end
-
 function generate_path()
     init_params(2, 8, 'centauro', 'obstacle_all', true)
     task_hd, state_dim = init_task('centauro','task_1')
@@ -183,13 +151,46 @@ function start()
     -- print (_start_pos[1], _start_pos[2])
 end
 
+
+function sample_obstacle_position()
+    local v = 0.02
+    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
+    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
+    for i=1, #obstacle_dynamic_hds, 1 do
+        obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+
+        local x = math.abs(obs_pos[1])
+        local y = math.abs(obs_pos[2])
+
+        local bound = 2
+        if x < 2.5 and y < 2.5 then 
+            obs_pos[1] = (math.random()-0.5)*2 * bound --+ obs_pos[1]
+            obs_pos[2] = (math.random()-0.5)*2 * 0.2--+ obs_pos[2]
+
+            if obs_pos[1] > bound then
+                obs_pos[1] = bound
+            elseif obs_pos[1] < -bound then 
+                obs_pos[1] = -bound
+            end
+
+            if obs_pos[2] > bound then
+                obs_pos[2] = bound
+            elseif obs_pos[2] < -bound then 
+                obs_pos[2] = -bound
+            end
+        end
+        -- print(obs_pos[1], obs_pos[2])
+        simSetObjectPosition(obstacle_dynamic_hds[i], -1, obs_pos)
+    end
+end
+
 function sample_initial_poses(radius)
 
     sample_obstacle_position()
 
     local robot_pos = {}
     robot_pos[1] = (math.random() - 0.5) * 1
-    robot_pos[2] = (math.random() - 0.5) * 1
+    robot_pos[2] = -0.6 --(math.random() - 0.5) * 1
     robot_pos[3] = _start_pos[3]
 
     local robot_ori = {}
@@ -204,7 +205,7 @@ function sample_initial_poses(radius)
 
     local target_pos = {}
     target_pos[1] = (math.random() - 0.5) * radius + robot_pos[1]
-    target_pos[2] = (math.random() - 0.5) * radius + robot_pos[2]
+    target_pos[2] = 0.7 --(math.random() - 0.5) * radius + robot_pos[2]
     target_pos[3] = _start_pos[3]
 
     local target_ori = {} 

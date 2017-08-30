@@ -6,12 +6,12 @@ import threading, queue
 from environment import centauro_env
 
 EP_MAX = 1000000
-EP_LEN = 50
+EP_LEN = 70
 N_WORKER = 4                # parallel workers
-GAMMA = 0.97                 # reward discount factor
-A_LR = 0.0001               # learning rate for actor
-C_LR = 0.001                # learning rate for critic
-MIN_BATCH_SIZE = 150         # minimum batch size for updating PPO
+GAMMA = 0.95                 # reward discount factor
+A_LR = 0.00005               # learning rate for actor
+C_LR = 0.0001                # learning rate for critic
+MIN_BATCH_SIZE = 100         # minimum batch size for updating PPO
 UPDATE_STEP = 5             # loop update operation n-steps
 EPSILON = 0.2               # for clipping surrogate objective
 
@@ -26,9 +26,7 @@ class PPO(object):
         self.tfs = tf.placeholder(tf.float32, [None, S_DIM], 'state')
 
         # critic
-        with tf.variable_scope('critic'):
-            lc = tf.layers.dense(self.tfs, 100, tf.nn.relu)
-            self.v = tf.layers.dense(lc, 1)
+        self.v = self._build_vnet('critic')
 
         self.tfdc_r = tf.placeholder(tf.float32, [None, 1], 'discounted_r')
         self.advantage = self.tfdc_r - self.v
@@ -52,10 +50,16 @@ class PPO(object):
             tf.clip_by_value(ratio, 1. - EPSILON, 1. + EPSILON) * self.tfadv))
 
         self.atrain_op = tf.train.AdamOptimizer(A_LR).minimize(self.aloss)
+
+        aparams = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='/pi')
+        cparams = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='/critic')
+        self.a_grads = tf.gradients(self.aloss, aparams)
+        self.c_grads = tf.gradients(self.closs, cparams)
+
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-        self.summary = tf.summary.FileWriter('data/log', self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter('data/log', self.sess.graph)
 
         # print ('Loading Model...')
         # ckpt = tf.train.get_checkpoint_state('./model/rl/')
@@ -77,19 +81,47 @@ class PPO(object):
                 s, a, r = data[:, :S_DIM], data[:, S_DIM: S_DIM + A_DIM], data[:, -1:]
                 print(len(s))
                 adv = self.sess.run(self.advantage, {self.tfs: s, self.tfdc_r: r})
+                a_loss, v_loss= [], []
                 # update actor and critic in a update loop
-                [self.sess.run(self.atrain_op, {self.tfs: s, self.tfa: a, self.tfadv: adv}) for _ in range(UPDATE_STEP)]
-                [self.sess.run(self.ctrain_op, {self.tfs: s, self.tfdc_r: r}) for _ in range(UPDATE_STEP)]
+                for _ in range(UPDATE_STEP):
+                    _, aloss = self.sess.run([self.atrain_op, self.aloss], {self.tfs: s, self.tfa: a, self.tfadv: adv})
+                for _ in range(UPDATE_STEP):
+                    _, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r})
+                
+                agrad = self.sess.run(self.a_grads, {self.tfs: s, self.tfa: a, self.tfadv: adv})
+                vgrad = self.sess.run(self.c_grads, {self.tfs: s, self.tfdc_r: r})
+                print(agrad, vgrad)
+                # [_, aloss = self.sess.run([self.atrain_op, self.aloss], {self.tfs: s, self.tfa: a, self.tfadv: adv}) for _ in range(UPDATE_STEP)]
+                # [_, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r}) for _ in range(UPDATE_STEP)]
                 UPDATE_EVENT.clear()        # updating finished
                 GLOBAL_UPDATE_COUNTER = 0   # reset counter
                 ROLLING_EVENT.set()         # set roll-out available
 
                 self.saver.save(self.sess, './model/rl/model.cptk') 
+                summary = tf.Summary()
 
+                # summary.value.add(tag='Perf/Sum reward', simple_value=float(sum_reward))
+                summary.value.add(tag='Perf/Avg reward', simple_value=float(r[0]))
+                summary.value.add(tag='Loss/A loss', simple_value=float(aloss))
+                summary.value.add(tag='Loss/C loss', simple_value=float(closs))
+                self.summary_writer.add_summary(summary, GLOBAL_EP)
+                self.summary_writer.flush() 
+
+    def _build_vnet(self, name):
+        with tf.variable_scope(name):
+            lc = tf.layers.dense(self.tfs, 16, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .01))
+            # lc = tf.layers.dense(lc, 40, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .1))
+            
+            v = tf.layers.dense(lc, 1)
+        return v
 
     def _build_anet(self, name, trainable):
         with tf.variable_scope(name):
-            l1 = tf.layers.dense(self.tfs, 200, tf.nn.relu, trainable=trainable)
+            l1 = tf.layers.dense(self.tfs, 16, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .01), trainable=trainable)
+            # l1 = tf.layers.dense(l1, 40, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .1), trainable=trainable)
+            
+            # l1 = tf.layers.dense(l1, 300, tf.nn.relu, trainable=trainable)
+
             mu = 2 * tf.layers.dense(l1, A_DIM, tf.nn.tanh, trainable=trainable)
             sigma = tf.layers.dense(l1, A_DIM, tf.nn.softplus, trainable=trainable)
             norm_dist = tf.contrib.distributions.Normal(loc=mu, scale=sigma)
@@ -172,7 +204,7 @@ if __name__ == '__main__':
         workers.append(Worker(env, i))
     # workers = [Worker(wid=i) for i in range(N_WORKER)]
     
-    GLOBAL_UPDATE_COUNTER, GLOBAL_EP = 0, 0
+    GLOBAL_UPDATE_COUNTER, GLOBAL_EP = 1, 1
     GLOBAL_RUNNING_R = []
     COORD = tf.train.Coordinator()
     QUEUE = queue.Queue()           # workers putting data in this queue

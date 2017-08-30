@@ -31,13 +31,11 @@ function move_robot(inInts,inFloats,inStrings,inBuffer)
 end
 
 function get_obstacle_info(inInts,inFloats,inStrings,inBuffer)
-    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
-    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
 
     local obs_info = {}
-    for i=1, #obstacle_dynamic_hds, 1 do 
-        local pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
-        local res, type, dim = simGetShapeGeomInfo(obstacle_dynamic_hds[i])
+    for i=1, #_obstacle_dynamic_hds, 1 do 
+        local pos = simGetObjectPosition(_obstacle_dynamic_hds[i], -1)
+        local res, type, dim = simGetShapeGeomInfo(_obstacle_dynamic_hds[i])
         obs_info[#obs_info+1] = pos[1]
         obs_info[#obs_info+1] = pos[2]
 
@@ -75,11 +73,9 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
     state[9] = 0.1
     state[10] = 0.0
 
-    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
-    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
-    for i=1, #obstacle_dynamic_hds, 1 do 
-        local obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], _robot_hd)
-        local obs_pos_global = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+    for i=1, #_obstacle_dynamic_hds, 1 do 
+        local obs_pos = simGetObjectPosition(_obstacle_dynamic_hds[i], _robot_hd)
+        local obs_pos_global = simGetObjectPosition(_obstacle_dynamic_hds[i], -1)
         -- local res, type, dim = simGetShapeGeomInfo(obstacle_dynamic_hds[i])
         
         local x = math.abs(obs_pos_global[1])
@@ -148,24 +144,27 @@ function start()
 
     _collection_hd = simGetCollectionHandle('obstacle_all')
     _obstacles_hds = simGetCollectionObjects(_collection_hd)
+
+    _obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
+    _obstacle_dynamic_hds = simGetCollectionObjects(_obstacle_dynamic_collection)
     -- print (_start_pos[1], _start_pos[2])
 end
 
 
 function sample_obstacle_position()
     local v = 0.02
-    local obstacle_dynamic_collection = simGetCollectionHandle('obstacle_dynamic')
-    local obstacle_dynamic_hds = simGetCollectionObjects(obstacle_dynamic_collection)
-    for i=1, #obstacle_dynamic_hds, 1 do
-        obs_pos = simGetObjectPosition(obstacle_dynamic_hds[i], -1)
+    local inside_obs_index = {}
+    for i=1, #_obstacle_dynamic_hds, 1 do
+        obs_pos = simGetObjectPosition(_obstacle_dynamic_hds[i], -1)
 
         local x = math.abs(obs_pos[1])
         local y = math.abs(obs_pos[2])
 
         local bound = 2
         if x < 2.5 and y < 2.5 then 
+            inside_obs_index[#inside_obs_index +1] = i
             obs_pos[1] = (math.random()-0.5)*2 * bound --+ obs_pos[1]
-            obs_pos[2] = (math.random()-0.5)*2 * 0.2--+ obs_pos[2]
+            obs_pos[2] = (math.random()-0.5)*2 * 0.5--+ obs_pos[2]
 
             if obs_pos[1] > bound then
                 obs_pos[1] = bound
@@ -180,17 +179,18 @@ function sample_obstacle_position()
             end
         end
         -- print(obs_pos[1], obs_pos[2])
-        simSetObjectPosition(obstacle_dynamic_hds[i], -1, obs_pos)
+        simSetObjectPosition(_obstacle_dynamic_hds[i], -1, obs_pos)
     end
+    return inside_obs_index
 end
 
 function sample_initial_poses(radius)
 
-    sample_obstacle_position()
+    inside_obs_index = sample_obstacle_position()
 
     local robot_pos = {}
     robot_pos[1] = (math.random() - 0.5) * 1
-    robot_pos[2] = -0.6 --(math.random() - 0.5) * 1
+    robot_pos[2] = -0.8 --(math.random() - 0.5) * 1
     robot_pos[3] = _start_pos[3]
 
     local robot_ori = {}
@@ -205,7 +205,7 @@ function sample_initial_poses(radius)
 
     local target_pos = {}
     target_pos[1] = (math.random() - 0.5) * radius + robot_pos[1]
-    target_pos[2] = 0.7 --(math.random() - 0.5) * radius + robot_pos[2]
+    target_pos[2] = 0.85 --(math.random() - 0.5) * radius + robot_pos[2]
     target_pos[3] = _start_pos[3]
 
     local target_ori = {} 
@@ -218,6 +218,16 @@ function sample_initial_poses(radius)
     simSetObjectQuaternion(_target_hd, -1, target_ori)
     simSetObjectPosition(_fake_robot_hd,-1,target_pos)
     simSetObjectQuaternion(_fake_robot_hd, -1, target_ori)
+
+
+    local obs_pos = {}
+    local obs_index = math.random(#inside_obs_index)
+    obs_index = inside_obs_index[obs_index]
+    obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
+    obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
+    obs_pos[3] = 0
+    simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
+
 
     local res_robot = simCheckCollision(_robot_hd, _collection_hd)
     local res_target = simCheckCollision(_fake_robot_hd, _collection_hd)

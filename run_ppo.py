@@ -5,11 +5,11 @@ import threading, queue
 
 from environment import centauro_env
 
-EP_MAX = 1000000
-EP_LEN = 70
+EP_MAX = 8000
+EP_LEN = 50
 N_WORKER = 4                # parallel workers
 GAMMA = 0.95                 # reward discount factor
-A_LR = 0.00005               # learning rate for actor
+A_LR = 0.0001               # learning rate for actor
 C_LR = 0.0001                # learning rate for critic
 MIN_BATCH_SIZE = 100         # minimum batch size for updating PPO
 UPDATE_STEP = 5             # loop update operation n-steps
@@ -79,7 +79,7 @@ class PPO(object):
                 data = [QUEUE.get() for _ in range(QUEUE.qsize())]      # collect data from all workers
                 data = np.vstack(data)
                 s, a, r = data[:, :S_DIM], data[:, S_DIM: S_DIM + A_DIM], data[:, -1:]
-                print(len(s))
+                # print(len(s))
                 adv = self.sess.run(self.advantage, {self.tfs: s, self.tfdc_r: r})
                 a_loss, v_loss= [], []
                 # update actor and critic in a update loop
@@ -88,9 +88,9 @@ class PPO(object):
                 for _ in range(UPDATE_STEP):
                     _, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r})
                 
-                agrad = self.sess.run(self.a_grads, {self.tfs: s, self.tfa: a, self.tfadv: adv})
-                vgrad = self.sess.run(self.c_grads, {self.tfs: s, self.tfdc_r: r})
-                print(agrad, vgrad)
+                # agrad = self.sess.run(self.a_grads, {self.tfs: s, self.tfa: a, self.tfadv: adv})
+                # vgrad = self.sess.run(self.c_grads, {self.tfs: s, self.tfdc_r: r})
+                # print(agrad, vgrad)
                 # [_, aloss = self.sess.run([self.atrain_op, self.aloss], {self.tfs: s, self.tfa: a, self.tfadv: adv}) for _ in range(UPDATE_STEP)]
                 # [_, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r}) for _ in range(UPDATE_STEP)]
                 UPDATE_EVENT.clear()        # updating finished
@@ -108,17 +108,21 @@ class PPO(object):
                 self.summary_writer.flush() 
 
     def _build_vnet(self, name):
+        # init = tf.contrib.layers.xavier_initializer()
+        init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            lc = tf.layers.dense(self.tfs, 16, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .01))
-            # lc = tf.layers.dense(lc, 40, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .1))
+            lc = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init)
+            # lc = tf.layers.dense(lc, 8, tf.nn.tanh, kernel_initializer=init)
             
             v = tf.layers.dense(lc, 1)
         return v
 
     def _build_anet(self, name, trainable):
+        # init = tf.contrib.layers.xavier_initializer()
+        init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            l1 = tf.layers.dense(self.tfs, 16, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .01), trainable=trainable)
-            # l1 = tf.layers.dense(l1, 40, tf.nn.tanh, kernel_initializer=tf.random_normal_initializer(0., .1), trainable=trainable)
+            l1 = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            # l1 = tf.layers.dense(l1, 8, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
             
             # l1 = tf.layers.dense(l1, 300, tf.nn.relu, trainable=trainable)
 
@@ -163,6 +167,9 @@ class Worker(object):
                 s = s_
                 ep_r += r
 
+                # if self.wid == 0:
+                #     print(s)
+
                 GLOBAL_UPDATE_COUNTER += 1               # count to minimum batch size, no need to wait other workers
                 if t == EP_LEN - 1 or GLOBAL_UPDATE_COUNTER >= MIN_BATCH_SIZE or done:
                     v_s_ = self.ppo.get_v(s_)
@@ -175,12 +182,15 @@ class Worker(object):
                     discounted_r.reverse()
 
                     bs, ba, br = np.vstack(buffer_s), np.vstack(buffer_a), np.array(discounted_r)[:, np.newaxis]
+                    sum_reward = np.sum(buffer_r[:-1])
+                    print(GLOBAL_EP, 'sum reward:', sum_reward, discounted_r[0])
                     buffer_s, buffer_a, buffer_r = [], [], []
                     QUEUE.put(np.hstack((bs, ba, br)))          # put data in the queue
                     if GLOBAL_UPDATE_COUNTER >= MIN_BATCH_SIZE:
                         ROLLING_EVENT.clear()       # stop collecting data
                         UPDATE_EVENT.set()          # globalPPO update
-                        print(self.wid, 'update', discounted_r[0])
+
+                        # print(self.wid, 'update', discounted_r[0])
 
                     if GLOBAL_EP >= EP_MAX:         # stop training
                         COORD.request_stop()

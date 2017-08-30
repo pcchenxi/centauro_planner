@@ -8,7 +8,7 @@ dx = step
 dy = step
 dh = step/3
 dl = step/3
-dw = math.pi/180 * 1
+dw = math.pi/180 * 10
 
 collision_hd_1 = simGetCollectionHandle('centauro')
 collision_hd_2 = simGetCollectionHandle('obstacle_all')

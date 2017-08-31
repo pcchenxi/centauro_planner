@@ -37,14 +37,16 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = 38 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+observation_space = 18 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
 action_space = 2 #len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
         self.port_num = port_num
-        self.dist_pre = -100
+        self.dist_pre = 100
         self.dist_init = self.dist_pre
+        self.sum_reward = 0
+        self.ep_dist = 0
 
         self.path_used = 1
         self.step_inep = 0
@@ -80,11 +82,22 @@ class Simu_env():
         return state
 
     def reset(self):
+        res, retInts, retFloats, retStrings, retBuffer = self.call_sim_function('centauro', 'reset', [observation_range*2])        
+        # state, reward, is_finish, info = self.step([0, 0, 0, 0, 0])
+        robot_state = []
+        for i in range(10):
+            _, _, robot_state, _, _ = self.call_sim_function('centauro', 'get_robot_state') # x, y, theta, h, l,   ////   tx, ty t_theta, th, tl
+            if len(robot_state) != 0:
+                break
+        obs_grid = self.get_observation_gridmap(robot_state[0], robot_state[1])
+        state = self.convert_state(robot_state, obs_grid)
+
         self.step_inep = 0
         self.dist_pre = self.dist_init
+        self.sum_reward = 0
 
-        res, retInts, retFloats, retStrings, retBuffer = self.call_sim_function('centauro', 'reset', [observation_range*2])        
-        state, reward, is_finish, info = self.step([0, 0, 0, 0, 0])
+        dist_sq = robot_state[5]*robot_state[5] + robot_state[6]*robot_state[6]
+        self.ep_dist = math.sqrt(dist_sq)
         return state
 
     def step(self, action): 
@@ -120,7 +133,9 @@ class Simu_env():
         # x, y, theta, h, l,   ////   tx, ty t_theta, th, tl
         is_finish = False
         close = False 
-        reward = 0
+        goal= False
+        hit = False
+        reward = 0 
 
         action = np.asarray(action)
         # print(action, reward)
@@ -137,23 +152,24 @@ class Simu_env():
         dist_l = abs(robot_state[4] - robot_state[9])
         dist_theta = abs(robot_state[2] - robot_state[7])
 
-        if self.dist_pre == self.dist_init:
-            reward = np.exp(-self.dist_init*self.dist_init)
+        # reward_method = np.exp(-dist_squre) - np.exp(-dist_pre_squre)
+        reward_method = -(dist - self.dist_pre)
 
-        reward += np.exp(-dist_squre) - np.exp(-dist_pre_squre)
-#       
-        # if dist < self.dist_pre:
-        #     reward = np.exp(-dist_squre)
-        # else:
-        #     reward = -np.exp(-dist_squre)
+        if self.dist_pre != self.dist_init:
+            reward = reward_method
 
-        # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
-        
-            # close = True
-        if dist < 0.1:
-            reward += 1 - np.exp(-dist_squre)       
+        if dist < 0.2 and found_pose != bytearray(b"f"):
+            # reward += 1 - np.exp(-dist_squre)       
             is_finish = True
-        
+            # goal = True
+            reward += 2
+
+        if found_pose == bytearray(b"f"):       # when collision or no pose can be found
+            is_finish = True 
+            # reward += np.exp(-(dist+1)*(dist+1)) - np.exp(-dist_squre)
+            reward += -(0.5)
+
+
         # if close and dist_h < 0.02:
         #     reward += 0.01
 
@@ -166,27 +182,12 @@ class Simu_env():
         # if close and dist_h < 0.02 and dist_l < 0.02 and dist_theta < 0.02:     
         #     reward = 5    
         #     is_finish = True
-
-        if found_pose == bytearray(b"f"):       # when collision or no pose can be found
-            is_finish = True 
-            reward = -(np.exp(-dist_squre))
-
-        # if abs(robot_state[0] - robot_state[5]) > 0.05:
-        #     reward = -1
-        #     is_finish = True 
-        # if abs(robot_state[1] - robot_state[6]) > 0.05:
-        #     reward = -1
-        #     is_finish = True             
-        # if abs(robot_state[2] - robot_state[7]) > 0.05:
-        #     reward = -1
-        #     is_finish = True      
-        # if abs(robot_state[0]) > 2 or abs(robot_state[1]) > 2:
-        #     is_finish = True
             
-        # if self.port_num == 20000:
-        #     print (dist, self.dist_pre, reward)
 
         # print(dist_squre, dist_pre_squre, reward)
+        self.sum_reward += reward
+        # if goal or hit:
+        #     print('final', reward, self.sum_reward)
         self.dist_pre = dist
         return reward, is_finish
 

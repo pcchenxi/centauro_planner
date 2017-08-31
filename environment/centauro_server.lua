@@ -163,8 +163,8 @@ function sample_obstacle_position()
         local bound = 2
         if x < 2.5 and y < 2.5 then 
             inside_obs_index[#inside_obs_index +1] = i
-            obs_pos[1] = (math.random()-0.5)*2 * bound --+ obs_pos[1]
-            obs_pos[2] = (math.random()-0.5)*2 * 0.5--+ obs_pos[2]
+            obs_pos[1] = (math.random()-0.5)*2 * bound 
+            obs_pos[2] = (math.random()-0.5)*2 * bound --0.5
 
             if obs_pos[1] > bound then
                 obs_pos[1] = bound
@@ -189,8 +189,8 @@ function sample_initial_poses(radius)
     inside_obs_index = sample_obstacle_position()
 
     local robot_pos = {}
-    robot_pos[1] = (math.random() - 0.5) * 1
-    robot_pos[2] = -0.8 --(math.random() - 0.5) * 1
+    robot_pos[1] = (math.random() - 0.5) * 2
+    robot_pos[2] = (math.random() - 0.5) * 2 -- -0.8
     robot_pos[3] = _start_pos[3]
 
     local robot_ori = {}
@@ -205,13 +205,13 @@ function sample_initial_poses(radius)
 
     local target_pos = {}
     target_pos[1] = (math.random() - 0.5) * radius + robot_pos[1]
-    target_pos[2] = 0.85 --(math.random() - 0.5) * radius + robot_pos[2]
+    target_pos[2] = (math.random() - 0.5) * radius + robot_pos[2] --0.85
     target_pos[3] = _start_pos[3]
 
     local target_ori = {} 
     target_ori[1] = _start_ori[1] 
     target_ori[2] = _start_ori[2]
-    target_ori[3] = robot_ori[3] --(math.random() - 0.5) * 2 * math.pi
+    target_ori[3] = (math.random() - 0.5) * 2 * math.pi
     target_ori[4] = _start_ori[4]
 
     simSetObjectPosition(_target_hd,-1,target_pos)
@@ -220,13 +220,13 @@ function sample_initial_poses(radius)
     simSetObjectQuaternion(_fake_robot_hd, -1, target_ori)
 
 
-    local obs_pos = {}
-    local obs_index = math.random(#inside_obs_index)
-    obs_index = inside_obs_index[obs_index]
-    obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
-    obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
-    obs_pos[3] = 0
-    simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
+    -- local obs_pos = {}
+    -- local obs_index = math.random(#inside_obs_index)
+    -- obs_index = inside_obs_index[obs_index]
+    -- obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
+    -- obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
+    -- obs_pos[3] = 0.2
+    -- simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
 
 
     local res_robot = simCheckCollision(_robot_hd, _collection_hd)

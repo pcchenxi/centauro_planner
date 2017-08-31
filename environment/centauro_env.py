@@ -37,13 +37,14 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = 12 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+observation_space = 38 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
 action_space = 2 #len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
         self.port_num = port_num
-        self.dist_pre = -2
+        self.dist_pre = -100
+        self.dist_init = self.dist_pre
 
         self.path_used = 1
         self.step_inep = 0
@@ -80,6 +81,7 @@ class Simu_env():
 
     def reset(self):
         self.step_inep = 0
+        self.dist_pre = self.dist_init
 
         res, retInts, retFloats, retStrings, retBuffer = self.call_sim_function('centauro', 'reset', [observation_range*2])        
         state, reward, is_finish, info = self.step([0, 0, 0, 0, 0])
@@ -118,9 +120,9 @@ class Simu_env():
         # x, y, theta, h, l,   ////   tx, ty t_theta, th, tl
         is_finish = False
         close = False 
+        reward = 0
 
         action = np.asarray(action)
-        reward = -0.01  # - np.sum(abs(action[3:])) * 0.1
         # print(action, reward)
         current_h = robot_state[3]
         target_h = robot_state[8]
@@ -135,6 +137,9 @@ class Simu_env():
         dist_l = abs(robot_state[4] - robot_state[9])
         dist_theta = abs(robot_state[2] - robot_state[7])
 
+        if self.dist_pre == self.dist_init:
+            reward = np.exp(-self.dist_init*self.dist_init)
+
         reward += np.exp(-dist_squre) - np.exp(-dist_pre_squre)
 #       
         # if dist < self.dist_pre:
@@ -145,9 +150,9 @@ class Simu_env():
         # reward += 0.1/5 * ((5-dist)*(5-dist)*(5-dist))  
         
             # close = True
-        # if dist < 0.1:
-        #     reward += 0.05            
-        #     close = True
+        if dist < 0.1:
+            reward += 1 - np.exp(-dist_squre)       
+            is_finish = True
         
         # if close and dist_h < 0.02:
         #     reward += 0.01
@@ -164,7 +169,7 @@ class Simu_env():
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
             is_finish = True 
-            reward = -0.5 #-np.exp(-dist_squre)/2
+            reward = -(np.exp(-dist_squre))
 
         # if abs(robot_state[0] - robot_state[5]) > 0.05:
         #     reward = -1

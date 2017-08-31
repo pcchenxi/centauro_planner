@@ -5,13 +5,13 @@ import threading, queue
 
 from environment import centauro_env
 
-EP_MAX = 8000
+EP_MAX = 100000
 EP_LEN = 50
 N_WORKER = 4                # parallel workers
-GAMMA = 0.95                 # reward discount factor
+GAMMA = 1                 # reward discount factor
 A_LR = 0.0001               # learning rate for actor
 C_LR = 0.0001                # learning rate for critic
-MIN_BATCH_SIZE = 100         # minimum batch size for updating PPO
+MIN_BATCH_SIZE = 300         # minimum batch size for updating PPO
 UPDATE_STEP = 5             # loop update operation n-steps
 EPSILON = 0.2               # for clipping surrogate objective
 
@@ -111,8 +111,9 @@ class PPO(object):
         # init = tf.contrib.layers.xavier_initializer()
         init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            lc = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init)
-            # lc = tf.layers.dense(lc, 8, tf.nn.tanh, kernel_initializer=init)
+            lc = tf.layers.dense(self.tfs, 25, tf.nn.tanh, kernel_initializer=init)
+            lc = tf.layers.dense(lc, 25, tf.nn.tanh, kernel_initializer=init)
+            lc = tf.layers.dense(lc, 10, tf.nn.tanh, kernel_initializer=init)
             
             v = tf.layers.dense(lc, 1)
         return v
@@ -121,8 +122,8 @@ class PPO(object):
         # init = tf.contrib.layers.xavier_initializer()
         init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            l1 = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
-            # l1 = tf.layers.dense(l1, 8, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            l1 = tf.layers.dense(self.tfs, 25, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            l1 = tf.layers.dense(l1, 25, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
             
             # l1 = tf.layers.dense(l1, 300, tf.nn.relu, trainable=trainable)
 
@@ -183,7 +184,8 @@ class Worker(object):
 
                     bs, ba, br = np.vstack(buffer_s), np.vstack(buffer_a), np.array(discounted_r)[:, np.newaxis]
                     sum_reward = np.sum(buffer_r[:-1])
-                    print(GLOBAL_EP, 'sum reward:', sum_reward, discounted_r[0])
+                    print(GLOBAL_EP, 'sum reward:', sum_reward, discounted_r[0], done)
+                    print(buffer_r)
                     buffer_s, buffer_a, buffer_r = [], [], []
                     QUEUE.put(np.hstack((bs, ba, br)))          # put data in the queue
                     if GLOBAL_UPDATE_COUNTER >= MIN_BATCH_SIZE:

@@ -220,13 +220,13 @@ function sample_initial_poses(radius)
     simSetObjectQuaternion(_fake_robot_hd, -1, target_ori)
 
 
-    -- local obs_pos = {}
-    -- local obs_index = math.random(#inside_obs_index)
-    -- obs_index = inside_obs_index[obs_index]
-    -- obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
-    -- obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
-    -- obs_pos[3] = 0.2
-    -- simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
+    local obs_pos = {}
+    local obs_index = math.random(#inside_obs_index)
+    obs_index = inside_obs_index[obs_index]
+    obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
+    obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
+    obs_pos[3] = 0.2
+    simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
 
 
     local res_robot = simCheckCollision(_robot_hd, _collection_hd)

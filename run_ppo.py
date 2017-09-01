@@ -7,11 +7,12 @@ import math
 from environment import centauro_env
 
 EP_MAX = 900000000
-EP_LEN = 150
+EP_LEN = 100
 N_WORKER = 4                # parallel workers
 GAMMA = 0.99                 # reward discount factor
 A_LR = 0.00005               # learning rate for actor
 C_LR = 0.000005                # learning rate for critic
+All_LR = 0.00005
 MIN_BATCH_SIZE = 500         # minimum batch size for updating PPO
 UPDATE_STEP = 5             # loop update operation n-steps
 EPSILON = 0.2               # for clipping surrogate objective
@@ -31,7 +32,6 @@ class PPO(object):
 
         self.tfdc_r = tf.placeholder(tf.float32, [None, 1], 'discounted_r')
         self.advantage = self.tfdc_r - self.v
-        
         self.closs = tf.reduce_mean(tf.square(self.advantage))
         self.ctrain_op = tf.train.AdamOptimizer(C_LR).minimize(self.closs)
 
@@ -53,10 +53,9 @@ class PPO(object):
 
         self.atrain_op = tf.train.AdamOptimizer(A_LR).minimize(self.aloss)
 
-        aparams = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='/pi')
-        cparams = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='/critic')
-        self.a_grads = tf.gradients(self.aloss, aparams)
-        self.c_grads = tf.gradients(self.closs, cparams)
+        # total loss
+        self.total_loss = self.closs*0.2 + self.aloss
+        self.all_train_op = tf.train.AdamOptimizer(All_LR).minimize(self.total_loss)
 
         self.sess.run(tf.global_variables_initializer())
 
@@ -89,9 +88,10 @@ class PPO(object):
                     _, aloss = self.sess.run([self.atrain_op, self.aloss], {self.tfs: s, self.tfa: a, self.tfadv: adv})
                 for _ in range(UPDATE_STEP):
                     _, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r})
-                
-                # agrad = self.sess.run(self.a_grads, {self.tfs: s, self.tfa: a, self.tfadv: adv})
-                # vgrad = self.sess.run(self.c_grads, {self.tfs: s, self.tfdc_r: r})
+
+                for _ in range(UPDATE_STEP):
+                    _, closs, aloss = self.sess.run([self.all_train_op, self.closs, self.aloss], {self.tfs: s, self.tfdc_r: r, self.tfa: a, self.tfadv: adv})
+
                 # print(agrad, vgrad)
                 # [_, aloss = self.sess.run([self.atrain_op, self.aloss], {self.tfs: s, self.tfa: a, self.tfadv: adv}) for _ in range(UPDATE_STEP)]
                 # [_, closs = self.sess.run([self.ctrain_op, self.closs], {self.tfs: s, self.tfdc_r: r}) for _ in range(UPDATE_STEP)]
@@ -124,8 +124,8 @@ class PPO(object):
         # init = tf.contrib.layers.xavier_initializer()
         init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            l1 = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
-            # l1 = tf.layers.dense(l1, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            l1 = tf.layers.dense(self.tfs, 64, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            # l1 = tf.layers.dense(l1, 36, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
             
             # l1 = tf.layers.dense(l1, 300, tf.nn.relu, trainable=trainable)
 
@@ -220,7 +220,6 @@ class Worker(object):
                         UPDATE_EVENT.set()          # globalPPO update
 
                         GLOBAL_EP += 1
-
                         # print(self.wid, 'update', discounted_r[0])
 
                     if GLOBAL_EP >= EP_MAX:         # stop training

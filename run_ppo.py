@@ -2,16 +2,17 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import threading, queue
+import math
 
 from environment import centauro_env
 
-EP_MAX = 100000
-EP_LEN = 100
+EP_MAX = 900000000
+EP_LEN = 150
 N_WORKER = 4                # parallel workers
-GAMMA = 0.95                 # reward discount factor
-A_LR = 0.00001               # learning rate for actor
-C_LR = 0.00001                # learning rate for critic
-MIN_BATCH_SIZE = 100         # minimum batch size for updating PPO
+GAMMA = 0.99                 # reward discount factor
+A_LR = 0.00005               # learning rate for actor
+C_LR = 0.000005                # learning rate for critic
+MIN_BATCH_SIZE = 500         # minimum batch size for updating PPO
 UPDATE_STEP = 5             # loop update operation n-steps
 EPSILON = 0.2               # for clipping surrogate objective
 
@@ -30,6 +31,7 @@ class PPO(object):
 
         self.tfdc_r = tf.placeholder(tf.float32, [None, 1], 'discounted_r')
         self.advantage = self.tfdc_r - self.v
+        
         self.closs = tf.reduce_mean(tf.square(self.advantage))
         self.ctrain_op = tf.train.AdamOptimizer(C_LR).minimize(self.closs)
 
@@ -100,8 +102,8 @@ class PPO(object):
                 self.saver.save(self.sess, './model/rl/model.cptk') 
                 summary = tf.Summary()
 
-                # summary.value.add(tag='Perf/Sum reward', simple_value=float(sum_reward))
-                summary.value.add(tag='Perf/Avg reward', simple_value=float(r[0]))
+                summary.value.add(tag='Perf/EP return', simple_value=float(r[0]))
+                summary.value.add(tag='Perf/Avg return', simple_value=float(np.mean(r)))
                 summary.value.add(tag='Loss/A loss', simple_value=float(aloss))
                 summary.value.add(tag='Loss/C loss', simple_value=float(closs))
                 self.summary_writer.add_summary(summary, GLOBAL_EP)
@@ -111,8 +113,8 @@ class PPO(object):
         # init = tf.contrib.layers.xavier_initializer()
         init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            lc = tf.layers.dense(self.tfs, 25, tf.nn.tanh, kernel_initializer=init)
-            # lc = tf.layers.dense(lc, 10, tf.nn.tanh, kernel_initializer=init)
+            lc = tf.layers.dense(self.tfs, 64, tf.nn.tanh, kernel_initializer=init)
+            # lc = tf.layers.dense(lc, 32, tf.nn.tanh, kernel_initializer=init)
             # lc = tf.layers.dense(lc, 10, tf.nn.tanh, kernel_initializer=init)
             
             v = tf.layers.dense(lc, 1)
@@ -122,8 +124,8 @@ class PPO(object):
         # init = tf.contrib.layers.xavier_initializer()
         init = tf.random_normal_initializer(0., .01)
         with tf.variable_scope(name):
-            l1 = tf.layers.dense(self.tfs, 25, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
-            # l1 = tf.layers.dense(l1, 10, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            l1 = tf.layers.dense(self.tfs, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
+            # l1 = tf.layers.dense(l1, 32, tf.nn.tanh, kernel_initializer=init, trainable=trainable)
             
             # l1 = tf.layers.dense(l1, 300, tf.nn.relu, trainable=trainable)
 
@@ -193,6 +195,14 @@ class Worker(object):
                     # print(discounted_r)
                     discounted_r.reverse()
                     # print(discounted_r)
+                    
+                    ############## scale return #####################
+                    for i in range(len(buffer_s)):
+                        dx = buffer_s[i][3]
+                        dy = buffer_s[i][4]
+                        dist = math.sqrt(dx*dx + dy*dy)
+                        discounted_r[i] = discounted_r[i]/dist
+                    # print(discounted_r)
 
                     bs, ba, br = np.vstack(buffer_s), np.vstack(buffer_a), np.array(discounted_r)[:, np.newaxis]
                     sum_reward = np.sum(buffer_r[-1])
@@ -209,6 +219,8 @@ class Worker(object):
                         ROLLING_EVENT.clear()       # stop collecting data
                         UPDATE_EVENT.set()          # globalPPO update
 
+                        GLOBAL_EP += 1
+
                         # print(self.wid, 'update', discounted_r[0])
 
                     if GLOBAL_EP >= EP_MAX:         # stop training
@@ -218,7 +230,7 @@ class Worker(object):
                     if done:
                         break
 
-            GLOBAL_EP += 1
+            # GLOBAL_EP += 1
 
 
 if __name__ == '__main__':

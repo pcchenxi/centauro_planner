@@ -37,8 +37,8 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = 18 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
-action_space = 2 #len(action_list)
+observation_space = 26 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+action_space = 5 #len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
@@ -105,12 +105,12 @@ class Simu_env():
         if isinstance(action, np.int32) or isinstance(action, int) or isinstance(action, np.int64):
             action = action_list[action]
 
-        a = [0,0,0,0,0]
-        a[0] = action[0]
-        a[1] = action[1] 
+        # a = [0,0,0,0,0]
+        # a[0] = action[0]
+        # a[1] = action[1] 
         # a[2] = action[2] 
 
-        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', a)
+        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', action)
 
         robot_state = []
         for i in range(10):
@@ -135,7 +135,6 @@ class Simu_env():
         close = False 
         goal= False
         hit = False
-        reward = 0 
 
         action = np.asarray(action)
         # print(action, reward)
@@ -152,22 +151,28 @@ class Simu_env():
         dist_l = abs(robot_state[4] - robot_state[9])
         dist_theta = abs(robot_state[2] - robot_state[7])
 
+        # height and leg 
+        reward = (-abs(robot_state[3]) - abs(robot_state[4]))/2
+        # print(reward)
+
         # reward_method = np.exp(-dist_squre) - np.exp(-dist_pre_squre)
         reward_method = -(dist - self.dist_pre)
-
+        if reward_method < 0:
+            reward_method = 0
+            
         if self.dist_pre != self.dist_init:
-            reward = reward_method
+            reward += reward_method
 
         if dist < 0.2 and found_pose != bytearray(b"f"):
             # reward += 1 - np.exp(-dist_squre)       
             is_finish = True
             # goal = True
-            reward += 2
+            reward += 0.2
 
         if found_pose == bytearray(b"f"):       # when collision or no pose can be found
             is_finish = True 
             # reward += np.exp(-(dist+1)*(dist+1)) - np.exp(-dist_squre)
-            reward += -(0.5)
+            # reward += -self.ep_dist/2
 
 
         # if close and dist_h < 0.02:

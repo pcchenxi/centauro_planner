@@ -84,6 +84,7 @@ function get_robot_state(inInts,inFloats,inStrings,inBuffer)
         if x < 2.5 and y < 2.5 then 
             state[#state+1] = obs_pos[1]
             state[#state+1] = obs_pos[2] 
+            state[#state+1] = obs_pos[3] 
         end
     end
 
@@ -160,22 +161,23 @@ function sample_obstacle_position()
         local x = math.abs(obs_pos[1])
         local y = math.abs(obs_pos[2])
 
-        local bound = 2
+        local bound_x = 2
+        local bound_y = 0.5
         if x < 2.5 and y < 2.5 then 
             inside_obs_index[#inside_obs_index +1] = i
-            obs_pos[1] = (math.random()-0.5)*2 * bound 
-            obs_pos[2] = (math.random()-0.5)*2 * bound --0.5
+            obs_pos[1] = (math.random()-0.5)*2 * bound_x 
+            obs_pos[2] = (math.random()-0.5)*2 * bound_y 
 
-            if obs_pos[1] > bound then
-                obs_pos[1] = bound
-            elseif obs_pos[1] < -bound then 
-                obs_pos[1] = -bound
+            if obs_pos[1] > bound_x then
+                obs_pos[1] = bound_x
+            elseif obs_pos[1] < -bound_x then 
+                obs_pos[1] = -bound_x
             end
 
-            if obs_pos[2] > bound then
-                obs_pos[2] = bound
-            elseif obs_pos[2] < -bound then 
-                obs_pos[2] = -bound
+            if obs_pos[2] > bound_y then
+                obs_pos[2] = bound_y
+            elseif obs_pos[2] < -bound_y then 
+                obs_pos[2] = -bound_y
             end
         end
         -- print(obs_pos[1], obs_pos[2])
@@ -190,7 +192,7 @@ function sample_initial_poses(radius)
 
     local robot_pos = {}
     robot_pos[1] = (math.random() - 0.5) * 2
-    robot_pos[2] = (math.random() - 0.5) * 2 -- -0.8
+    robot_pos[2] = 1 --(math.random() - 0.5) * 2 
     robot_pos[3] = _start_pos[3]
 
     local robot_ori = {}
@@ -201,11 +203,11 @@ function sample_initial_poses(radius)
 
     simSetObjectPosition(_robot_hd, -1, robot_pos)
     simSetObjectQuaternion(_robot_hd, -1, robot_ori)
-    -- set_joint_values(_joint_hds, _start_joint_values)
+    set_joint_values(_joint_hds, _start_joint_values)
 
     local target_pos = {}
     target_pos[1] = (math.random() - 0.5) * radius + robot_pos[1]
-    target_pos[2] = (math.random() - 0.5) * radius + robot_pos[2] --0.85
+    target_pos[2] = -1 --(math.random() - 0.5) * radius + robot_pos[2] 
     target_pos[3] = _start_pos[3]
 
     local target_ori = {} 
@@ -223,11 +225,11 @@ function sample_initial_poses(radius)
     local obs_pos = {}
     local obs_index = math.random(#inside_obs_index)
     obs_index = inside_obs_index[obs_index]
-    obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *1
-    obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1
-    obs_pos[3] = 0.2
+    local obs_pos_before =  simGetObjectPosition(_obstacle_dynamic_hds[obs_index], -1)
+    obs_pos[1] = (robot_pos[1] + target_pos[1])/2 + (math.random() - 0.5) *0.5
+    obs_pos[2] = (robot_pos[2] + target_pos[2])/2 + (math.random() - 0.5) *1.5
+    obs_pos[3] = obs_pos_before[3]
     simSetObjectPosition(_obstacle_dynamic_hds[obs_index], -1, obs_pos)
-
 
     local res_robot = simCheckCollision(_robot_hd, _collection_hd)
     local res_target = simCheckCollision(_fake_robot_hd, _collection_hd)

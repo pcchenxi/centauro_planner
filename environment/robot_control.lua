@@ -92,6 +92,10 @@ function do_action_hl(robot_hd, action)
 end
 
 function do_action(robot_hd, action)
+    joint_hds = get_joint_hds(16)
+    start_pos = simGetObjectPosition(robot_hd, -1)
+    start_ori = simGetObjectQuaternion(robot_hd,-1)
+    start_joint_values = get_joint_values(joint_hds)
     -- print ('action ', action[1], action[2], action[3], action[4], action[5])
 
     -- action is the final value to send
@@ -176,6 +180,9 @@ function do_action(robot_hd, action)
         return 't'
     else
         -- displayInfo('collide '..i..' '..foot_pos[1]..' '..foot_pos[2] )
+        -- simSetObjectPosition(robot_hd, -1, start_pos)
+        -- simSetObjectQuaternion(robot_hd, -1, start_ori)
+        -- set_joint_values(joint_hds, start_joint_values)
         return 'f'      
     end
 end

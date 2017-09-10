@@ -37,19 +37,15 @@ observation_pixel = int(observation_range/grid_size)
 
 observation_image_size = observation_pixel*2
 observation_control = 8
-observation_space = 19 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
-action_space = 5 #len(action_list)
-
-REWARD_GOAL = 1
-REWARD_CRASH = -1
+observation_space = 10 #observation_image_size*observation_image_size + 8  # 60 x 60 + 8
+action_space = 2 #len(action_list)
 
 class Simu_env():
     def __init__(self, port_num):
         self.port_num = port_num
         self.dist_pre = 0
-        self.reward_gap = 0.1
-        self.next_reward_dist = 0
-        self.ep_init = False
+        # self.reward_gap = 0.1
+        # self.next_reward_dist = 0
 
         self.init_step = 0
         self.count_down = 0
@@ -80,7 +76,7 @@ class Simu_env():
         # count_down = 1
         # if self.count_down == 0:
         #     count_down = 0
-        # count_down = self.count_down/self.init_step *2-1
+        # count_down = self.count_down/self.init_step
         # state = np.append(count_down, state)
         # state = state.flatten()
 
@@ -90,16 +86,14 @@ class Simu_env():
         # print('reset')
         self.init_step = count_down
         self.count_down = count_down
-        self.dist_pre = 1000
+        self.dist_pre = -100
 
         res, retInts, retFloats, retStrings, retBuffer = self.call_sim_function('centauro', 'reset', [observation_range*2])        
         state, reward, is_finish, info = self.step([0, 0, 0, 0, 0])
 
-        dist = self.compute_dist(state[0], state[1])
+        dist = self.compute_dist(state[1], state[2])
         self.dist_pre = dist
-        self.ep_init = False
         # self.next_reward_dist = dist - self.reward_gap
-        # self.next_reward_dist = dist
         
         # print('game start, dist is', dist, 'get reward when', self.next_reward_dist)
         return state
@@ -109,12 +103,12 @@ class Simu_env():
         if isinstance(action, np.int32) or isinstance(action, int) or isinstance(action, np.int64):
             action = action_list[action]
 
-        # a = [0,0,0,0,0]
-        # a[0] = action[0]
-        # a[1] = action[1] 
+        a = [0,0,0,0,0]
+        a[0] = action[0]
+        a[1] = action[1] 
         # a[2] = action[2] 
 
-        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', action)
+        _, _, _, _, found_pose = self.call_sim_function('centauro', 'step', a)
 
         robot_state = []
         for i in range(10):
@@ -133,49 +127,60 @@ class Simu_env():
         return state_, reward, is_finish, ''
 
     def compute_reward(self, robot_state, action, found_pose):
-        # 0, 1, 2,     3, 4      -5,    -4, -3, -2, -1 
-        # tx, ty, obs..........  theta,  h,  l,  rx, ry   
+        # 0, 1, 2,     3, 4           5,  6, 7,       8,  9
+        # x, y, theta, h, l,   ////   tx, ty t_theta, th, tl
         is_finish = False
-        out= False
         reward = 0
+        
         # action = np.asarray(action)
 
         dist = self.compute_dist(robot_state[0], robot_state[1])
-        reward = np.exp(-dist) - np.exp(-self.dist_pre)
-        # reward = np.exp(-dist) - 0.1*obs_cost*obs_cost - 0.001*action_cost
-        # reward = -(dist - self.dist_pre)
-        # reward = np.exp(-dist)
+        # desire_dist = self.dist_pre - 0.15
+        # diff = -(dist - desire_dist)/0.3 + 0.5
+        # reward = diff*2
 
-        if abs(robot_state[-1]) > 2.5 or abs(robot_state[-2]) > 2.5:
-            out = True
+        # height and leg 
+        # reward = (-abs(robot_state[3]) - abs(robot_state[4]))/2
+        # print(reward)
 
-        if found_pose == bytearray(b"f") or out:       # when collision or no pose can be found
-            is_finish = True 
-            # print('crashed!!')
-            # reward = self.dist_pre
-            reward = REWARD_CRASH
-            return reward, -1
+        reward = -(dist - self.dist_pre)
+        # if dist < self.dist_pre:
+        #     reward = 1
+        # else:
+        #     reward = -1
 
         if dist < 0.2 and found_pose != bytearray(b"f"):
-            # print('Goal', dist )
+            print('Goal', dist )
             is_finish = True
-            # reward += dist + REWARD_GOAL
-            reward += 1 - np.exp(-dist) + REWARD_GOAL
-            # reward = REWARD_GOAL
-            return reward, 1
+            reward += dist
+            # reward += 1
 
             # reward += dist * 100
             # print('Win!!!')
 
+        # if dist < self.next_reward_dist and found_pose != bytearray(b"f"):
+        #     reward += 1
+        #     self.next_reward_dist -= self.reward_gap
+        #     print('got one point!', dist, self.next_reward_dist, 'step left', self.count_down) 
+        #     if self.next_reward_dist < 0.2:
+        #         reward = 5
+        #         is_finish = True 
+        #         print('     Win!!!')
+
+        if found_pose == bytearray(b"f"):       # when collision or no pose can be found
+            is_finish = True 
+            # reward = -1 * 100
+            reward = -0.3
+            print('crashed!!')
 
         # if self.count_down == 0:
         #     is_finish = True
-        #     reward = 0
         #     print('No step' )
 
         # print(dist, self.dist_pre, reward)
         self.dist_pre = dist
-        return reward, 0
+        return reward, is_finish
+
 
 
     ####################################  interface funcytion  ###################################

@@ -8,28 +8,19 @@ import pickle, os
 from environment import centauro_env
 
 EP_MAX = 100000
-EP_LEN = 500
-N_WORKER = 4                  # parallel workers
+EP_LEN = 100
+N_WORKER = 1                # parallel workers
 GAMMA = 0.98                 # reward discount factor
-A_LR = 0.00005               # learning rate for actor
-C_LR = 0.0001                # learning rate for critic
+A_LR = 0.0001               # learning rate for actor
+C_LR = 0.0002                # learning rate for critic
 All_LR = 0.0005
+MIN_BATCH_SIZE = 300         #EP_LEN*N_WORKER         # minimum batch size for updating PPO
+MINIBATCH_SIZE = int(MIN_BATCH_SIZE/2)
+A_UPDATE_STEP = 3             # loop update operation n-steps
+C_UPDATE_STEP = 3
+UPDATE_STEP = 2
+EPSILON = 0.5               # for clipping surrogate objective
 
-EPSILON = 0.2               # for clipping surrogate objective
-
-BL_ITERATION = 1
-BATCH_SIZE = 8000         #EP_LEN*N_WORKER         # minimum batch size for updating PPO
-
-C_MINIBATCH_SIZE = 1000
-A_MINIBATCH_SIZE = 1000
-
-C_UPDATE_STEP = int(BATCH_SIZE/C_MINIBATCH_SIZE) * 10
-A_UPDATE_STEP = int(BATCH_SIZE/A_MINIBATCH_SIZE) * 10
-
-TRAIN_BL = True
-
-SUCCESS_NUM = 1
-EP_NUM = 1
 ###############################
 observation_bound = 3
 
@@ -38,23 +29,23 @@ a_loss_weight = 1
 
 seperate_update = True
 
-a_unit_num1 = 200
-a_unit_num2 = 100
+a_unit_num1 = 64
+a_unit_num2 = 0
 a_unit_num3 = 0
 
-c_unit_num1 = 200
-c_unit_num2 = 100
+c_unit_num1 = 32
+c_unit_num2 = 0
 c_unit_num3 = 0
 
 # tf.random_normal_initializer(0., .001)
 # tf.contrib.layers.xavier_initializer()
 # tf.zeros_initializer()
 # tf.constant_initializer(1)
-init = tf.contrib.layers.xavier_initializer()
-init_a = tf.random_normal_initializer(0., .1)
+init = tf.zeros_initializer()
+init_a = tf.zeros_initializer()
 activation = tf.nn.tanh
 activation_a = tf.nn.tanh
-value_activation = tf.nn.tanh
+value_activation = tf.nn.sigmoid
 
 S_DIM, A_DIM = centauro_env.observation_space, centauro_env.action_space         # state and action dimension
 
@@ -68,16 +59,15 @@ for r in range(EP_LEN+1):
     d_g = GAMMA * d_g
     DISCONTED_GAMMA.append(d_g)
 
-REWARD_GOAL = centauro_env.REWARD_GOAL
-REWARD_CRASH = centauro_env.REWARD_CRASH
+REWARD_GOAL = 0
+REWARD_CRASH = -0.5
 
 class PPO(object):
     def __init__(self):
         self.sess = tf.Session()
         self.tfs = tf.placeholder(tf.float32, [None, S_DIM], 'state')
-        self.s_clip = tf.clip_by_value(self.tfs, -1, 1)
 
-        self.feature = self.s_clip #self._build_featurenet('state_feature')
+        self.feature = self.tfs #self._build_featurenet('state_feature')
         # critic
         self.v = self._build_vnet('critic')
 
@@ -142,8 +132,9 @@ class PPO(object):
         # else:
         #     print ('no model file')  
 
-    def random_select_sample(self, s, a, r, adv, num):
-        selected_index = np.random.choice(len(s), num)
+    def random_select_sample(self, s, a, r, adv):
+        global MINIBATCH_SIZE
+        selected_index = np.random.choice(len(s), MINIBATCH_SIZE)
         selected_s, selected_a, selected_adv, selected_r = [], [], [], []
         for index in selected_index:
             selected_s.append(s[index])
@@ -152,18 +143,8 @@ class PPO(object):
             selected_r.append(r[index])
         return selected_s, selected_a, selected_adv, selected_r
 
-    def a_select_sample(self, s, a, r, adv, num, iteration):
-        selected_s, selected_a, selected_adv, selected_r = [], [], [], []
-        for i in range(iteration*num, iteration*num + num):
-            i = i%len(s)
-            selected_s.append(s[i])
-            selected_a.append(a[i])
-            selected_adv.append(adv[i])
-            selected_r.append(r[i])
-        return selected_s, selected_a, selected_adv, selected_r
-
     def update(self):
-        global GLOBAL_UPDATE_COUNTER, GLOBAL_EP, TRAIN_BL, BL_ITERATION, SUCCESS_NUM, EP_NUM, C_MINIBATCH_SIZE, A_MINIBATCH_SIZE, C_UPDATE_STEP, A_UPDATE_STEP
+        global GLOBAL_UPDATE_COUNTER, GLOBAL_EP, MINIBATCH_SIZE
         while not COORD.should_stop():
             if GLOBAL_EP < EP_MAX:
                 UPDATE_EVENT.wait()                     # wait until get batch of data
@@ -177,30 +158,16 @@ class PPO(object):
                 # update actor and critic in a update loop
                 if seperate_update:
                     selected_s, selected_a, selected_adv, selected_r = s, a, adv, r
-                    for iteration in range(A_UPDATE_STEP):
-                        selected_s, selected_a, selected_adv, selected_r = self.random_select_sample(s, a, r, adv, A_MINIBATCH_SIZE)
+                    for _ in range(A_UPDATE_STEP):
+                        selected_s, selected_a, selected_adv, selected_r = self.random_select_sample(s, a, r, adv)
                         feed_direct = {self.tfs: selected_s, self.tfa: selected_a, self.tfadv: selected_adv, self.tfdc_r: selected_r}
                         self.sess.run(self.atrain_op, feed_direct)
-                        aloss = self.sess.run(self.aloss, feed_direct)
-                        a_loss.append(aloss)
 
-                    for iteration in range(C_UPDATE_STEP):
-                        selected_s, selected_a, selected_adv, selected_r = self.random_select_sample(s, a, r, adv, C_MINIBATCH_SIZE)
+                    for _ in range(C_UPDATE_STEP):
+                        selected_s, selected_a, selected_adv, selected_r = self.random_select_sample(s, a, r, adv)
 
                         feed_direct = {self.tfs: selected_s, self.tfa: selected_a, self.tfadv: selected_adv, self.tfdc_r: selected_r}
-
-                        v_before = self.sess.run(self.v, feed_direct).flatten()
-
                         _, summary = self.sess.run([self.ctrain_op, self.merged], feed_direct)
-
-                        v_after, closs = self.sess.run([self.v, self.closs], feed_direct)
-                        v_after = v_after.flatten()
-                        td = np.asarray(selected_adv).flatten()
-                        # print('iteration ', iteration)
-                        # for i in range(len(td)):
-                        #     print(td[i], v_before[i], v_after[i], selected_r[i])
-
-                        v_loss.append(closs)
                         # value, closs, summary = self.sess.run([self.v, self.closs, self.merged], feed_direct)
                 else:
                     for _ in range(UPDATE_STEP):
@@ -208,9 +175,7 @@ class PPO(object):
                         feed_direct = {self.tfs: selected_s, self.tfa: selected_a, self.tfadv: selected_adv, self.tfdc_r: selected_r}
                         _, summary = self.sess.run([self.all_train_op, self.merged], feed_direct)
 
-                print('loss', v_loss)
-                print('aloss', a_loss)
-                # ########################## save ep value #################################333
+                ########################## save ep value #################################333
                 # list = os.listdir(ep_dir) # dir is your directory path
                 # number_files = int(len(list)/2)
                 # with open(ep_dir + 'state_'+str(number_files), 'wb') as handle:
@@ -224,21 +189,16 @@ class PPO(object):
                 ROLLING_EVENT.set()         # set roll-out available
                 GLOBAL_EP += 1
 
-                if GLOBAL_EP > BL_ITERATION and TRAIN_BL:
-                    print('******************************** BL BATCH READY ******************************** ')
-                    TRAIN_BL = False
-
                 self.saver.save(self.sess, './model/rl/model.cptk') 
+
                 self.summary_writer.add_summary(summary, GLOBAL_EP)
+                print(GLOBAL_EP, 'update with batch', len(s), len(r))
+                self.saver.save(self.sess, './model/rl/model.cptk') 
 
                 summary = tf.Summary()
-                summary.value.add(tag='Perf/Success Rate', simple_value=float(SUCCESS_NUM/EP_NUM))
+                summary.value.add(tag='Perf/Avg return', simple_value=float(np.mean(r)))
                 self.summary_writer.add_summary(summary, GLOBAL_EP)
                 self.summary_writer.flush() 
-
-                print('SUCCESS_NUM', SUCCESS_NUM, EP_NUM)
-                SUCCESS_NUM = 1
-                EP_NUM = 1
 
     def _build_featurenet(self, name):
         with tf.variable_scope(name):
@@ -272,7 +232,7 @@ class PPO(object):
             if a_unit_num3 != 0:
                 lc = tf.layers.dense(lc, c_unit_num3, activation, kernel_initializer=init, name='c_fc3')
             
-            v = 2 * tf.layers.dense(lc, 1, value_activation, name='value')
+            v = tf.layers.dense(lc, 1, value_activation, name='value')
         return v
 
     def _build_anet(self, name, trainable):
@@ -302,8 +262,7 @@ class PPO(object):
 
     def get_v(self, s):
         if s.ndim < 2: s = s[np.newaxis, :]
-        value = self.sess.run(self.v, {self.tfs: s})
-        return value #np.clip(value, REWARD_CRASH-1, REWARD_GOAL + 1)
+        return self.sess.run(self.v, {self.tfs: s})[0, 0]
 
 
 class Worker(object):
@@ -314,7 +273,7 @@ class Worker(object):
 
 
     def work(self):
-        global GLOBAL_EP, GLOBAL_RUNNING_R, GLOBAL_UPDATE_COUNTER, BATCH_SIZE, SUCCESS_NUM, EP_NUM
+        global GLOBAL_EP, GLOBAL_RUNNING_R, GLOBAL_UPDATE_COUNTER, HISTORY_READY, HISTORY
         while not COORD.should_stop():
             s = self.env.reset(EP_LEN)
             ep_r = 0
@@ -346,23 +305,15 @@ class Worker(object):
 
                 GLOBAL_UPDATE_COUNTER += 1               # count to minimum batch size, no need to wait other workers
                 # if done:
-                if t == EP_LEN - 1 or GLOBAL_UPDATE_COUNTER >= BATCH_SIZE or done!= 0:
-                    if done == 1:
-                        SUCCESS_NUM += 1
-
+                if t == EP_LEN - 1 or GLOBAL_UPDATE_COUNTER >= MIN_BATCH_SIZE or done!= 0:
                     discounted_r = self.compute_return(buffer_r, buffer_s, done, s_)                           # compute discounted reward
                     buffer_s = self.process_state(buffer_s)
 
                     bs, ba, br = np.vstack(buffer_s), np.vstack(buffer_a), np.array(discounted_r)[:, np.newaxis]
 
-                    # summary = tf.Summary()
-                    # summary.value.add(tag='Perf/Success Rate', simple_value=float(buffer_r[-1]))
-                    # self.ppo.summary_writer.add_summary(summary, GLOBAL_EP)
-                    # self.ppo.summary_writer.flush() 
-
                     buffer_s, buffer_a, buffer_r = [], [], []
                     QUEUE.put(np.hstack((bs, ba, br)))          # put data in the queue
-                    if GLOBAL_UPDATE_COUNTER >= BATCH_SIZE:
+                    if GLOBAL_UPDATE_COUNTER >= MIN_BATCH_SIZE:
                         ROLLING_EVENT.clear()       # stop collecting data
                         UPDATE_EVENT.set()          # globalPPO update
 
@@ -370,7 +321,6 @@ class Worker(object):
                         COORD.request_stop()
                     
                     if done!= 0:
-                        EP_NUM += 1
                         break
 
             # GLOBAL_EP += 1
@@ -383,19 +333,19 @@ class Worker(object):
         # reward_0 = 0
         norm_dist = dist_s0
         ################################
-        reward_0 = np.exp(-dist_s0*dist_s0)
+        reward_0 = np.exp(-dist_s0)
         norm_dist = 1
 
         disconted_rewards = [reward_0]
 
-        for i in range(1, len(buffer_r)):
-            # if buffer_r[i] < reward_line:
+        for i in range(len(buffer_r)):
+            if buffer_r[i] < reward_line:
                 # print('     reward line:', reward_line)
                 # reward = reward_line - buffer_r[i]
-            reward = np.exp(-buffer_r[i]*buffer_r[i]) - np.exp(-buffer_r[i-1]*buffer_r[i-1])
-            dis_reward = reward * DISCONTED_GAMMA[i]
-            disconted_rewards.append(dis_reward)
-                # reward_line = buffer_r[i]
+                reward = np.exp(-buffer_r[i]) - np.exp(-reward_line)
+                dis_reward = reward * DISCONTED_GAMMA[i]
+                disconted_rewards.append(dis_reward)
+                reward_line = buffer_r[i]
                 # print('     got reward', reward, dis_reward)
             # else:
             #     print('     no reward')
@@ -412,52 +362,39 @@ class Worker(object):
         return normalized_value
 
     def compute_return(self, buffer_r, buffer_s, done, s_):
-        global TRAIN_BL
         dist_v_s_ = math.sqrt(s_[0]*s_[0] + s_[1]*s_[1])
 
-        # if done == 1:
-        #     v_s_ = REWARD_GOAL
-        # elif done == -1:
-        #     v_s_ = REWARD_CRASH 
-        # else:
-        #     # dist_v_s_ = 1 - np.exp(-dist_v_s_)
-        #     # v_s_ = self.ppo.get_v(s_) * (dist_v_s_ - REWARD_CRASH + REWARD_GOAL) + REWARD_CRASH
-        #     v_s_ = self.ppo.get_v(s_) * (1 - REWARD_CRASH + REWARD_GOAL) + REWARD_CRASH
-        #     # print(v_s_, 'ppo s', self.ppo.get_v(s_) , 'dist', dist_v_s_)
+        if done == 1:
+            v_s_ = REWARD_GOAL
+        elif done == -1:
+            v_s_ = REWARD_CRASH 
+        else:
+            # dist_v_s_ = 1 - np.exp(-dist_v_s_)
+            # v_s_ = self.ppo.get_v(s_) * (dist_v_s_ - REWARD_CRASH + REWARD_GOAL) + REWARD_CRASH
+            v_s_ = self.ppo.get_v(s_) * (1 - REWARD_CRASH + REWARD_GOAL) + REWARD_CRASH
+            # print(v_s_, 'ppo s', self.ppo.get_v(s_) , 'dist', dist_v_s_)
 
-        # # print('reward:', buffer_r)
-        # normolized_r = []
-        # for i in range(len(buffer_r)):
-        #     # print(' ',i, '--')
-        #     normalized_value = self.compute_step_reward(buffer_r[i:], buffer_s[i], v_s_)
-        #     normolized_r.append(normalized_value)
-
-        dist_v_s_ = math.sqrt(s_[0]*s_[0] + s_[1]*s_[1])
-        v_s_ = 0
-        if done == 0 and TRAIN_BL == False:
-            v_s_ = self.ppo.get_v(s_)[0, 0]
-
-        # print ('-----------------------', v_s_)
-        # print(buffer_r)
+        # print('reward:', buffer_r)
         normolized_r = []
-        for r in buffer_r[::-1]:
-            v_s_ = r + GAMMA * v_s_
-            normolized_r.append(v_s_)                    
-        normolized_r.reverse()
-        # print(normolized_r)
-            
-        # for i in range(0, len(buffer_s), 10):
-        #     s = buffer_s[i]
-            # print ('    AC', self.ppo.get_v(s), normolized_r[i], self.ppo.choose_action(s))
-        # print(dist_v_s_, 'ppo_s', self.ppo.get_v(s_), normolized_r[-1], done)
-        # print('sum reward', np.sum(buffer_r), normolized_r[0])
-        # print ('-----------------------')
+        for i in range(len(buffer_r)):
+            # print(' ',i, '--')
+            normalized_value = self.compute_step_reward(buffer_r[i:], buffer_s[i], v_s_)
+            normolized_r.append(normalized_value)
+
+        # print(normolized_r, v_s_)
+        # if done != 0:
+            # print(normolized_r)
+        print(dist_v_s_, 'ppo s', self.ppo.get_v(s_), normolized_r[-1], done)
+        for i in range(0, len(buffer_s), 10):
+            s = buffer_s[i]
+            print ('    ppo', self.ppo.get_v(s), normolized_r[i], self.ppo.choose_action(s))
         return normolized_r
 
     def process_state(self, buffer_s):
         for i in range(len(buffer_s)):
             # buffer_s[i][0] = buffer_s[i][0]*2 -1
              for j in range(buffer_s[i].shape[0]):
+                # buffer_s[i][0] = buffer_s[i][0]*2 -1
                 buffer_s[i][j] = buffer_s[i][j]/observation_bound
 
         return buffer_s
